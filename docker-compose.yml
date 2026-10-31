@@ -1,0 +1,98 @@
+name: tiktok-scheduler
+
+x-app: &app
+  build:
+    context: .
+  env_file:
+    - .env
+  environment:
+    NODE_ENV: production
+    # Absolute path: the web app, the worker and prisma CLI must resolve the same SQLite file.
+    DATABASE_URL: file:/app/data/tiktok-scheduler.db
+    REDIS_URL: redis://redis:6379
+    STORAGE_ROOT: /app/storage
+  volumes:
+    - ./data:/app/data
+    - ./storage:/app/storage
+  restart: unless-stopped
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec']
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  migrate:
+    <<: *app
+    target: runtime
+    build:
+      context: .
+      target: runtime
+    command: ['npx', 'prisma', 'migrate', 'deploy']
+    restart: 'no'
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    <<: *app
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    <<: *app
+    build:
+      context: .
+      target: worker
+    command: ['npm', 'run', 'start:worker']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'npm', 'run', 'health', '-w', '@tiktok-scheduler/worker']
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 40s
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  redis-data:

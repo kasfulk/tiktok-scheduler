@@ -1,0 +1,242 @@
+// TikTok Scheduler — SQLite schema.
+// SQLite has no native enum/array support, so enumerated values are stored as
+// strings and validated by Zod in @tiktok-scheduler/shared. Times are stored in UTC;
+// `timezone` fields hold the IANA zone used to interpret local schedule values.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                          String   @id @default(cuid())
+  name                        String
+  email                       String   @unique
+  password                    String
+  timezone                    String   @default("UTC")
+  defaultAccountId            String?
+  telegramChatId              String?
+  telegramEnabled             Boolean  @default(false)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  sessions          Session[]
+  accounts          TikTokAccount[]
+  videos            Video[]
+  batches           ScheduleBatch[]
+  postingSettings   PostingSettings?
+  notifications     Notification[]
+  captionTemplates  CaptionTemplate[]
+
+  @@index([createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  userAgent String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model TikTokAccount {
+  id               String    @id @default(cuid())
+  userId           String
+  openId           String    @unique
+  username         String
+  displayName      String?
+  avatarUrl        String?
+  accessToken      String
+  refreshToken     String?
+  tokenExpiresAt   DateTime?
+  refreshExpiresAt DateTime?
+  scopes           String    @default("")
+  connectionStatus String    @default("CONNECTED")
+  isDefault        Boolean   @default(false)
+  lastSyncedAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postingSettings AccountPostingSettings?
+  scheduledPosts ScheduledPost[]
+
+  @@index([userId])
+  @@index([connectionStatus])
+}
+
+model Video {
+  id             String   @id @default(cuid())
+  userId         String
+  title          String
+  filename       String
+  storageKey     String
+  thumbnailKey   String?
+  mimeType       String
+  fileSize       Int
+  duration       Float
+  width          Int
+  height         Int
+  caption        String?
+  hashtags       String?
+  status         String   @default("DRAFT")
+  processingError String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts ScheduledPost[]
+
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model ScheduledPost {
+  id                String    @id @default(cuid())
+  videoId           String
+  accountId         String
+  batchId           String?
+  scheduledAt       DateTime
+  timezone          String
+  status            String    @default("PENDING")
+  retryCount        Int       @default(0)
+  maxRetries        Int       @default(3)
+  externalPublishId String?
+  publishedPostId   String?
+  idempotencyKey    String    @unique
+  publishMethod     String    @default("DIRECT_POST")
+  privacyLevel      String    @default("PUBLIC_TO_EVERYONE")
+  publishedAt       DateTime?
+  nextAttemptAt     DateTime?
+  errorMessage      String?
+  attemptStartedAt  DateTime?
+  lockedBy          String?
+  lockedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  video  Video          @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  account TikTokAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  batch  ScheduleBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  logs   PublishingLog[]
+
+  @@index([status, scheduledAt])
+  @@index([status, nextAttemptAt])
+  @@index([scheduledAt])
+  @@index([accountId, scheduledAt])
+  @@index([videoId])
+  @@index([batchId])
+}
+
+model ScheduleBatch {
+  id                 String   @id @default(cuid())
+  userId             String
+  name               String
+  schedulingMode     String
+  startDate          String
+  startTime          String?
+  intervalMinutes    Int?
+  postingTimes       String?
+  timezone           String
+  dailyPostingLimit  Int
+  status             String   @default("COMPLETED")
+  scheduledCount     Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts ScheduledPost[]
+
+  @@index([userId, createdAt])
+}
+
+model PostingSettings {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  enableDailyLimit       Boolean  @default(true)
+  dailyPostingLimit      Int      @default(5)
+  minimumIntervalMinutes Int      @default(120)
+  activeHoursStart       String   @default("08:00")
+  activeHoursEnd         String   @default("22:00")
+  activeDays             String   @default("1,2,3,4,5,6,0")
+  timezone               String   @default("UTC")
+  limitScope             String   @default("GLOBAL")
+  defaultSchedulingMode  String   @default("INTERVAL")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AccountPostingSettings {
+  id                     String   @id @default(cuid())
+  accountId              String   @unique
+  enabled                Boolean  @default(true)
+  dailyPostingLimit      Int      @default(3)
+  minimumIntervalMinutes Int      @default(120)
+  activeHoursStart       String   @default("08:00")
+  activeHoursEnd         String   @default("22:00")
+  activeDays             String   @default("1,2,3,4,5,6,0")
+  timezone               String   @default("UTC")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  account TikTokAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+}
+
+model PublishingLog {
+  id               String   @id @default(cuid())
+  scheduledPostId  String
+  event            String
+  requestMetadata  String?
+  responseMetadata String?
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+
+  scheduledPost ScheduledPost @relation(fields: [scheduledPostId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledPostId, createdAt])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+model CaptionTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  content   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+}

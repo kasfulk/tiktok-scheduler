@@ -1,0 +1,36 @@
+{
+  "name": "tiktok-scheduler",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @tiktok-scheduler/web",
+    "dev:worker": "npm run dev -w @tiktok-scheduler/worker",
+    "build": "npm run build -w @tiktok-scheduler/web",
+    "start": "npm run start -w @tiktok-scheduler/web",
+    "start:worker": "npm run start -w @tiktok-scheduler/worker",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "db:setup": "prisma migrate deploy && npm run prisma:generate",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "eslint": "^9.39.5",
+    "prisma": "^6.19.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^3.2.7"
+  }
+}

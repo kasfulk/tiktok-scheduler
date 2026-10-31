@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "preserve",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["apps/web/*"],
+      "@tiktok-scheduler/db": ["packages/db/src/index.ts"],
+      "@tiktok-scheduler/scheduler": ["packages/scheduler/src/index.ts"],
+      "@tiktok-scheduler/tiktok": ["packages/tiktok/src/index.ts"],
+      "@tiktok-scheduler/shared": ["packages/shared/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "apps/worker/src/**/*.ts",
+    "apps/web/next-env.d.ts",
+    "apps/web/**/*.ts",
+    "apps/web/**/*.tsx",
+    "vitest.config.ts",
+    "packages/*/test/**/*.ts"
+  ],
+  "exclude": ["node_modules", "**/.next/**", "**/dist/**"]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@tiktok-scheduler/worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "health": "tsx src/health.ts"
+  },
+  "dependencies": {
+    "@tiktok-scheduler/db": "*",
+    "@tiktok-scheduler/scheduler": "*",
+    "@tiktok-scheduler/shared": "*",
+    "@tiktok-scheduler/tiktok": "*",
+    "bullmq": "^6.5.3",
+    "ioredis": "^6.0.0",
+    "@tiktok-scheduler/media": "*",
+    "@tiktok-scheduler/queue": "*"
+  }
+}

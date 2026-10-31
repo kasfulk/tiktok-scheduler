@@ -1,0 +1,23 @@
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+.env
+.env.local
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/backups/
+storage/videos/*
+storage/thumbnails/*
+# per-process leftovers from before STORAGE_ROOT became repository-relative
+apps/*/storage/
+!storage/videos/.gitkeep
+!storage/thumbnails/.gitkeep
+.DS_Store
+coverage/
+*.log
+~/
