@@ -42,6 +42,8 @@ export interface AccountDto {
   displayName: string | null;
   avatarUrl: string | null;
   connectionStatus: ConnectionStatus;
+  /** BROWSER = imported from a logged-in browser profile; its cookie jar replaces API tokens. */
+  authMode: 'OAUTH' | 'BROWSER';
   isDefault: boolean;
   scopes: string[];
   tokenExpiresAt: string | null;

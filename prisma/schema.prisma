@@ -62,6 +62,10 @@ model TikTokAccount {
   tokenExpiresAt   DateTime?
   refreshExpiresAt DateTime?
   scopes           String    @default("")
+  // OAUTH: accessToken/refreshToken from TikTok's authorization-code flow (API publishing).
+  // BROWSER: cookies captured from a logged-in browser profile; accessToken is unused.
+  authMode         String    @default("OAUTH")
+  browserSession   String?
   connectionStatus String    @default("CONNECTED")
   isDefault        Boolean   @default(false)
   lastSyncedAt     DateTime?

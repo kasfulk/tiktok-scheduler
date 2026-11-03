@@ -41,6 +41,15 @@ export default function AccountsPage() {
     onError: (error: ApiClientError) => toast.error(error.message),
   });
 
+  const browserMutation = useMutation({
+    mutationFn: () => apiFetch<AccountDto>('/api/tiktok/accounts/browser', { method: 'POST' }),
+    onSuccess: (account) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.accounts });
+      toast.success(`Imported @${account.username} from the browser session`);
+    },
+    onError: (error: ApiClientError) => toast.error(error.message),
+  });
+
   const setDefaultMutation = useMutation({
     mutationFn: (id: string) =>
       apiFetch<AccountDto>(`/api/tiktok/accounts/${id}`, { method: 'PATCH', json: { isDefault: true } }),
@@ -99,9 +108,19 @@ export default function AccountsPage() {
           <h1 className="text-lg font-semibold tracking-tight">TikTok Accounts</h1>
           <p className="text-xs text-muted-foreground">Connect and manage your TikTok accounts.</p>
         </div>
-        <Button onClick={() => connectMutation.mutate()} disabled={connectMutation.isPending}>
-          {connectMutation.isPending ? 'Connecting…' : 'Connect account'}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => browserMutation.mutate()}
+            disabled={browserMutation.isPending}
+            title="Reads the TikTok login from the Chromium profile on this host (CDP on 127.0.0.1:9333)"
+          >
+            {browserMutation.isPending ? 'Reading browser…' : 'Connect via browser'}
+          </Button>
+          <Button onClick={() => connectMutation.mutate()} disabled={connectMutation.isPending}>
+            {connectMutation.isPending ? 'Connecting…' : 'Connect account'}
+          </Button>
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -207,6 +226,7 @@ function AccountCard({
 
         <div className="flex flex-wrap gap-1.5">
           {account.isDefault ? <Badge variant="info">default</Badge> : null}
+          {account.authMode === 'BROWSER' ? <Badge variant="warning">browser session</Badge> : null}
           {account.scopes.map((scope) => (
             <Badge key={scope} variant="outline">
               {scope}

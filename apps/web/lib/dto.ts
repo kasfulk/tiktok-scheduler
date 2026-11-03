@@ -70,6 +70,7 @@ export interface AccountRow {
   displayName: string | null;
   avatarUrl: string | null;
   connectionStatus: string;
+  authMode: string;
   isDefault: boolean;
   scopes: string;
   tokenExpiresAt: Date | null;
@@ -84,6 +85,7 @@ export function accountToDto(account: AccountRow): AccountDto {
     displayName: account.displayName,
     avatarUrl: account.avatarUrl,
     connectionStatus: account.connectionStatus as AccountDto['connectionStatus'],
+    authMode: (account.authMode === 'BROWSER' ? 'BROWSER' : 'OAUTH') as AccountDto['authMode'],
     isDefault: account.isDefault,
     scopes: account.scopes ? account.scopes.split(/[\s,]+/).filter(Boolean) : [],
     tokenExpiresAt: account.tokenExpiresAt?.toISOString() ?? null,

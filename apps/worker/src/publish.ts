@@ -53,6 +53,7 @@ interface LoadedPost {
     refreshToken: string | null;
     tokenExpiresAt: Date | null;
     connectionStatus: string;
+    authMode: string;
     user: { telegramEnabled: boolean; telegramChatId: string | null };
   };
 }
@@ -108,6 +109,16 @@ export async function publishPost(params: {
         terminal: true,
         notification: { type: 'ACCOUNT_DISCONNECTED', title: 'TikTok account disconnected' },
       });
+    }
+
+    // Browser-session accounts have no API token; failing here beats a confusing 401 from TikTok.
+    if (post.account.authMode === 'BROWSER') {
+      return await failOrRetry(
+        ctx,
+        'BROWSER_ACCOUNT',
+        'This account was imported from a browser session. API publishing is not available for it yet.',
+        { terminal: true, notification: { type: 'PUBLISH_FAILED', title: 'Account uses a browser session' } },
+      );
     }
 
     const gate = await checkGates(ctx);
@@ -276,6 +287,7 @@ async function loadPost(postId: string): Promise<LoadedPost | null> {
           refreshToken: true,
           tokenExpiresAt: true,
           connectionStatus: true,
+          authMode: true,
           user: { select: { telegramEnabled: true, telegramChatId: true } },
         },
       },
