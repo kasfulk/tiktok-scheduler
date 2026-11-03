@@ -43,7 +43,8 @@ function uploadFile(
     try {
       const parsed = JSON.parse(xhr.responseText);
       if (xhr.status >= 200 && xhr.status < 300 && parsed?.data) {
-        resolve(parsed.data.video as VideoDto);
+        // The route returns the video DTO directly under `data` (not `data.video`).
+        resolve(parsed.data as VideoDto);
       } else if (parsed?.error) {
         reject(new Error(parsed.error.message || 'Upload failed'));
       } else {

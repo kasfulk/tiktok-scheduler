@@ -29,5 +29,9 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt).*)'],
+  // /api is excluded on purpose. Middleware makes Next clone the request body, and the clone is
+  // capped at 10 MB (experimental.proxyClientMaxBodySize), which silently truncated every upload
+  // larger than that. API auth does not need this gate anyway: `route()` validates the session and
+  // answers 401 itself.
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|robots.txt).*)'],
 };
