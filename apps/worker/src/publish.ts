@@ -104,6 +104,20 @@ export async function publishPost(params: {
       telegram: { enabled: post.account.user.telegramEnabled, chatId: post.account.user.telegramChatId },
     };
 
+    // One line per attempt so a silent queue is distinguishable from a stuck publish.
+    log('info', 'publish_started', {
+      postId,
+      workerId,
+      account: post.account.username,
+      authMode: post.account.authMode,
+      videoId: post.video.id,
+      publishMethod: post.publishMethod,
+      privacyLevel: post.privacyLevel,
+      videoSizeBytes: post.video.fileSize,
+      retryCount: post.retryCount,
+      resumePublishId: post.externalPublishId,
+    });
+
     if (post.account.connectionStatus === 'DISCONNECTED') {
       return await failOrRetry(ctx, 'ACCOUNT_DISCONNECTED', 'The TikTok account was disconnected', {
         terminal: true,
@@ -420,6 +434,14 @@ async function markPublished(
     }),
   ]);
 
+  log('info', 'publish_succeeded', {
+    postId: post.id,
+    publishId,
+    publicPostId,
+    account: post.account.username,
+    videoTitle: post.video.title,
+  });
+
   await notify({
     userId: post.account.userId,
     type: 'PUBLISH_SUCCESS',
@@ -439,6 +461,7 @@ async function markManual(ctx: PublishContext, code: string, message: string): P
     data: { status: 'MANUAL_ACTION_REQUIRED', errorMessage: `${code}: ${message}`, nextAttemptAt: null },
   });
   await recordLog(post.id, code, { message });
+  log('warn', 'publish_manual_action', { postId: post.id, code, reason: message, account: post.account.username });
   await notify({
     userId: post.account.userId,
     type: 'MANUAL_ACTION_REQUIRED',
@@ -477,6 +500,15 @@ async function failOrRetry(
     data: { status: 'FAILED', retryCount, errorMessage: `${code}: ${message}`, nextAttemptAt: null },
   });
   await recordLog(post.id, code, { message, retryCount, terminal: true });
+  log('error', 'publish_failed', {
+    postId: post.id,
+    code,
+    reason: message,
+    account: post.account.username,
+    authMode: post.account.authMode,
+    retryCount,
+    publishId: post.externalPublishId,
+  });
   await enqueueDeadLetter({ queue: 'publish', jobId: post.id, postId: post.id, reason: `${code}: ${message}` }).catch(
     () => undefined,
   );
@@ -526,7 +558,11 @@ export function sleep(ms: number): Promise<void> {
 }
 
 export function describeError(error: unknown): string {
-  if (error instanceof TikTokApiError) return `${error.code} (HTTP ${error.httpStatus})`;
+  if (error instanceof TikTokApiError) {
+    // logId/requestId are what TikTok support asks for; keep them in the stored error message.
+    const ids = [error.logId && `log_id=${error.logId}`, error.requestId && `request_id=${error.requestId}`].filter(Boolean);
+    return [`${error.code} (HTTP ${error.httpStatus})`, ...ids].join(' ');
+  }
   if (error instanceof SchedulingError) return `${error.code}: ${error.message}`;
   return error instanceof Error ? error.message : String(error);
 }

@@ -40,6 +40,15 @@ export async function parseMultipart(
   const boundary = extractBoundary(contentType);
   if (!request.body) throw new MultipartError('EMPTY_BODY', 'Request has no body');
 
+  // Tracked only to explain a truncated body: `received X of Y` points straight at a Content-Length
+  // mismatch (binary pasted into a shell string, aborted connection) instead of a vague parser error.
+  const declaredBytes = Number(request.headers.get('content-length') ?? '');
+  let receivedBytes = 0;
+  const truncationDetail = () =>
+    Number.isFinite(declaredBytes) && declaredBytes > 0
+      ? ` (received ${receivedBytes} of ${declaredBytes} bytes)`
+      : ` (received ${receivedBytes} bytes)`;
+
   const boundaryBytes = Buffer.from(`--${boundary}`);
   const delimiter = Buffer.from(`\r\n--${boundary}`);
   const reader = request.body.getReader();
@@ -53,6 +62,7 @@ export async function parseMultipart(
       return false;
     }
     buffer = Buffer.concat([buffer, Buffer.from(next.value)]);
+    receivedBytes += next.value.byteLength;
     return true;
   };
 
@@ -116,7 +126,7 @@ export async function parseMultipart(
       }
       scanned = buffer.length;
       if (scanned > MAX_HEADER_BYTES) throw new MultipartError('INVALID_MULTIPART', 'Part headers are too large');
-      if (!(await pull())) throw new MultipartError('INVALID_MULTIPART', 'Truncated part headers');
+      if (!(await pull())) throw new MultipartError('INVALID_MULTIPART', `Truncated part headers${truncationDetail()}`);
     }
   }
 
@@ -133,7 +143,7 @@ export async function parseMultipart(
       }
       searchFrom = Math.max(0, buffer.length - terminator.length + 1);
       if (buffer.length > MAX_FIELD_BYTES) throw new MultipartError('FIELD_TOO_LARGE', 'Form field is too large');
-      if (!(await pull())) throw new MultipartError('INVALID_MULTIPART', 'Truncated form field');
+      if (!(await pull())) throw new MultipartError('INVALID_MULTIPART', `Truncated form field${truncationDetail()}`);
     }
   }
 
@@ -174,7 +184,12 @@ export async function parseMultipart(
           if (!overflow) sink.write(slice);
           buffer = buffer.subarray(flushLength);
         }
-        if (!(await pull())) throw new MultipartError('INVALID_MULTIPART', 'Truncated file part');
+        if (!(await pull())) {
+          throw new MultipartError(
+            'INVALID_MULTIPART',
+            `Truncated file part${truncationDetail()}: the body ended before the closing boundary`,
+          );
+        }
       }
     } catch (error) {
       sink.destroy();
