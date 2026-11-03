@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { ok, route } from '@/lib/api';
 import { OAUTH_NONCE_COOKIE, createOAuthState } from '@/lib/oauth-state';
 import { appUrl, assertLiveCredentials, tiktokClient, tiktokMode } from '@/lib/tiktok';
+import { cookieSecure } from '@/lib/utils';
 
 export const GET = route(
   async () => {
@@ -13,7 +14,7 @@ export const GET = route(
     store.set(OAUTH_NONCE_COOKIE, nonce, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: cookieSecure(),
       path: '/',
       maxAge: 600,
     });

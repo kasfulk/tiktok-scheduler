@@ -7,6 +7,7 @@ import {
   revokeSession,
   type SafeUser,
 } from '@tiktok-scheduler/db';
+import { cookieSecure } from '@/lib/utils';
 
 export async function getSessionUser(): Promise<SafeUser | null> {
   const store = await cookies();
@@ -21,7 +22,7 @@ export async function startSession(userId: string, meta: { userAgent?: string | 
   store.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: cookieSecure(),
     path: '/',
     expires: expiresAt,
   });
@@ -35,7 +36,7 @@ export async function endSession(): Promise<void> {
   store.set(SESSION_COOKIE_NAME, '', {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: cookieSecure(),
     path: '/',
     maxAge: 0,
   });
