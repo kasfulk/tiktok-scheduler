@@ -33,6 +33,17 @@ Register the first account in the UI, then connect a TikTok account. With `TIKTO
 whole pipeline runs against a local fake API (see `packages/tiktok`), which is how the publishing
 worker is exercised in tests.
 
+### Demo instance
+
+A second pair of pm2 processes (`tiktok-scheduler-demo-web` / `-demo-worker`, port 3101) runs with
+`DEMO_MODE=true`: its own SQLite file (`data/demo.db`), its own storage and its own Redis database,
+and every publish goes to the in-process mock TikTok instead of the network. That is the only place
+a browser-session account (imported cookies, no API token) can publish. Seed it with:
+
+```bash
+DATABASE_URL=file:$PWD/data/demo.db node scripts/seed-demo.mjs
+```
+
 Generate the two secrets with:
 
 ```bash
@@ -81,6 +92,7 @@ UID juggling. Harden by switching to a fixed UID once you control those director
 | `PUBLISH_MAX_RETRIES` | `3` | Retries for pre-init failures (never after a publish id exists) |
 | `BACKUP_RETAIN` / `BACKUP_INTERVAL_HOURS` | `7` / `24` | `VACUUM INTO` snapshots in `data/backups` |
 | `TIKTOK_API_MODE` | `mock` | `live` requires an approved TikTok app |
+| `DEMO_MODE` | `false` | Demo instance: every publish is simulated, so browser-session accounts work end to end |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | — | Optional notification channel |
 
 ## How publishing works

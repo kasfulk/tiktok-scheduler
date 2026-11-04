@@ -4,6 +4,14 @@ export function tiktokMode(): 'mock' | 'live' {
   return process.env.TIKTOK_API_MODE === 'live' ? 'live' : 'mock';
 }
 
+/**
+ * Demo instance: publishes are simulated (mock TikTok), nothing leaves the machine.
+ * Off by default so a normal deployment can never silently fake a publish.
+ */
+export function demoMode(): boolean {
+  return process.env.DEMO_MODE === 'true';
+}
+
 export function createClient(): TikTokClient {
   return createTikTokClient({
     mode: tiktokMode(),

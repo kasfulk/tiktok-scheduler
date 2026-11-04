@@ -13,6 +13,7 @@ data/*.db-shm
 data/backups/
 storage/videos/*
 storage/thumbnails/*
+storage-demo/
 # per-process leftovers from before STORAGE_ROOT became repository-relative
 apps/*/storage/
 !storage/videos/.gitkeep

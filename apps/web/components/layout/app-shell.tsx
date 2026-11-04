@@ -38,9 +38,12 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppShell({
   user,
+  demo = false,
   children,
 }: {
   user: { name: string; email: string; timezone: string };
+  /** Demo instance: publishes are simulated, nothing reaches TikTok. */
+  demo?: boolean;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -127,7 +130,14 @@ export function AppShell({
             <ThemeToggle />
           </div>
         </header>
-        <main className="flex-1 px-4 py-5 md:px-6 md:py-6">{children}</main>
+        <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
+          {demo ? (
+            <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              Demo mode — publishes are simulated by a local mock TikTok. Nothing is posted to a real account.
+            </div>
+          ) : null}
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ import { absolutePathFor } from '@tiktok-scheduler/media';
 import { acquireLock, enqueueDeadLetter } from '@tiktok-scheduler/queue';
 import { TIKTOK_CAPTION_MAX_LENGTH, formatLocalDate, log, type NotificationType } from '@tiktok-scheduler/shared';
 import { TikTokApiError, type TikTokClient } from '@tiktok-scheduler/tiktok';
-import { backoffMs, createClient, maxRetries, publishTimeoutMs } from './config.js';
+import { backoffMs, createClient, demoMode, maxRetries, publishTimeoutMs, tiktokMode } from './config.js';
 import { notify } from './notifier.js';
 import { ensureAccessToken } from './tokens.js';
 
@@ -61,6 +61,8 @@ interface LoadedPost {
 interface PublishContext {
   post: LoadedPost;
   telegram: { enabled: boolean; chatId: string | null };
+  /** Demo publish: browser-session account in mock mode, nothing reaches TikTok. */
+  demo: boolean;
 }
 
 /**
@@ -102,6 +104,7 @@ export async function publishPost(params: {
     const ctx: PublishContext = {
       post,
       telegram: { enabled: post.account.user.telegramEnabled, chatId: post.account.user.telegramChatId },
+      demo: demoMode() && tiktokMode() === 'mock',
     };
 
     // One line per attempt so a silent queue is distinguishable from a stuck publish.
@@ -116,6 +119,7 @@ export async function publishPost(params: {
       videoSizeBytes: post.video.fileSize,
       retryCount: post.retryCount,
       resumePublishId: post.externalPublishId,
+      demoMode: ctx.demo,
     });
 
     if (post.account.connectionStatus === 'DISCONNECTED') {
@@ -125,12 +129,14 @@ export async function publishPost(params: {
       });
     }
 
-    // Browser-session accounts have no API token; failing here beats a confusing 401 from TikTok.
-    if (post.account.authMode === 'BROWSER') {
+    // Browser-session accounts carry no API token: they only publish on a demo instance.
+    // Elsewhere failing here beats a confusing 401 from TikTok.
+    const browserAccount = post.account.authMode === 'BROWSER';
+    if (browserAccount && !ctx.demo) {
       return await failOrRetry(
         ctx,
         'BROWSER_ACCOUNT',
-        'This account was imported from a browser session. API publishing is not available for it yet.',
+        'This account was imported from a browser session, so it has no API token. Publish it from a demo instance (DEMO_MODE=true with TIKTOK_API_MODE=mock) or reconnect it with OAuth.',
         { terminal: true, notification: { type: 'PUBLISH_FAILED', title: 'Account uses a browser session' } },
       );
     }
@@ -145,22 +151,27 @@ export async function publishPost(params: {
     }
 
     let accessToken: string;
-    try {
-      accessToken = await ensureAccessToken(
-        {
-          id: post.account.id,
-          userId: post.account.userId,
-          accessToken: post.account.accessToken,
-          refreshToken: post.account.refreshToken,
-          tokenExpiresAt: post.account.tokenExpiresAt,
-        },
-        client,
-      );
-    } catch (error) {
-      return await failOrRetry(ctx, 'TOKEN_EXPIRED', describeError(error), {
-        terminal: true,
-        notification: { type: 'TOKEN_EXPIRED', title: 'TikTok token expired' },
-      });
+    if (ctx.demo && browserAccount) {
+      // No OAuth token exists for a browser-session account; the mock server takes any bearer.
+      accessToken = 'mock-browser-session';
+    } else {
+      try {
+        accessToken = await ensureAccessToken(
+          {
+            id: post.account.id,
+            userId: post.account.userId,
+            accessToken: post.account.accessToken,
+            refreshToken: post.account.refreshToken,
+            tokenExpiresAt: post.account.tokenExpiresAt,
+          },
+          client,
+        );
+      } catch (error) {
+        return await failOrRetry(ctx, 'TOKEN_EXPIRED', describeError(error), {
+          terminal: true,
+          notification: { type: 'TOKEN_EXPIRED', title: 'TikTok token expired' },
+        });
+      }
     }
 
     // Resume path: a publish id already exists — poll it, never initialise another post.
