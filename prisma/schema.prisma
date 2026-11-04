@@ -21,6 +21,14 @@ model User {
   defaultAccountId            String?
   telegramChatId              String?
   telegramEnabled             Boolean  @default(false)
+  // Local (or self-hosted) OpenAI-compatible vision model used to draft captions.
+  // aiApiKey is stored encrypted with TOKEN_ENCRYPTION_KEY; aiModel empty = not configured.
+  // aiPrompt empty = use DEFAULT_AI_CAPTION_PROMPT from @tiktok-scheduler/shared.
+  aiCaptionEnabled            Boolean  @default(false)
+  aiBaseUrl                   String   @default("http://127.0.0.1:11434/v1")
+  aiModel                     String   @default("")
+  aiApiKey                    String?
+  aiPrompt                    String   @default("")
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 

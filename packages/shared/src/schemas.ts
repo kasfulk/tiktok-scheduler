@@ -198,6 +198,31 @@ export const generalSettingsSchema = z.object({
   telegramChatId: z.string().trim().max(64).nullable().optional(),
 });
 
+/** Prompt used when the user has not written their own. Stored empty in the DB means "use this". */
+export const DEFAULT_AI_CAPTION_PROMPT =
+  'Generate Caption berdasarkan thumbnail video, dengan hashtag yang berpotensi ramai sesuai dengan konteks';
+
+const httpUrl = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((value) => /^https?:\/\//i.test(value) && URL.canParse(value), 'Expected an http(s) URL');
+
+export const aiSettingsSchema = z.object({
+  enabled: z.boolean().optional(),
+  baseUrl: httpUrl.optional(),
+  model: z.string().trim().max(120).optional(),
+  apiKey: z.string().trim().max(400).nullable().optional(),
+  prompt: z.string().trim().max(2000).nullable().optional(),
+});
+
+export const generateCaptionSchema = z.object({
+  prompt: z.string().trim().max(2000).optional(),
+});
+
+export type AiSettingsInput = z.infer<typeof aiSettingsSchema>;
+export type GenerateCaptionInput = z.infer<typeof generateCaptionSchema>;
+
 export const tiktokConnectQuerySchema = z.object({
   redirectTo: z.string().max(200).optional(),
 });

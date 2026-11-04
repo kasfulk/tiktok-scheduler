@@ -126,6 +126,13 @@ are validated against `creator_info`, and direct post availability is never assu
 
 There is no browser automation, scraping or unofficial endpoint anywhere in this codebase, by design.
 
+## AI caption generation (local vision model)
+
+Settings → AI Caption points at any OpenAI-compatible endpoint (Ollama, LM Studio, llama.cpp, vLLM).
+The model must accept image input. The video thumbnail plus the current caption are sent to the model;
+the returned draft is saved only when the user accepts it in the publishing queue. The API key is
+stored encrypted with `TOKEN_ENCRYPTION_KEY` and never returned to the UI.
+
 ## Backups and restore
 
 The worker writes a consistent snapshot once a day (`VACUUM INTO`, safe while writing) to

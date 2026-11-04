@@ -72,4 +72,5 @@ export const queryKeys = {
   notifications: (unreadOnly: boolean) => ['notifications', unreadOnly] as const,
   publishingHistory: (params: Record<string, unknown> = {}) => ['publishing-history', params] as const,
   captionTemplates: ['caption-templates'] as const,
+  aiSettings: ['ai-settings'] as const,
 };

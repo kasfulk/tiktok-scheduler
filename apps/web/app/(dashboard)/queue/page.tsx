@@ -1,17 +1,17 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pause, Play, RefreshCw, X, Calendar, Clock, AlertCircle } from 'lucide-react';
+import { Pause, Play, RefreshCw, X, Calendar, Clock, AlertCircle, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { apiFetch, queryKeys, ApiClientError } from '@/lib/api-client';
-import type { QueueResponse, QueueItemDto } from '@/lib/types';
+import type { QueueResponse, QueueItemDto, GenerateCaptionResult } from '@/lib/types';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConfirmDialog, Dialog, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter } from '@/components/ui/dialog';
-import { Input, Label } from '@/components/ui/input';
+import { Input, Textarea, Label } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/progress';
 import { EmptyState, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -21,6 +21,7 @@ export default function QueuePage() {
   const [confirmPause, setConfirmPause] = useState(false);
   const [rescheduleItem, setRescheduleItem] = useState<QueueItemDto | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<QueueItemDto | null>(null);
+  const [captionItem, setCaptionItem] = useState<QueueItemDto | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.queue,
@@ -162,6 +163,7 @@ export default function QueuePage() {
                     onRetry={() => retryMutation.mutate(item.id)}
                     onCancel={() => setConfirmCancel(item)}
                     onReschedule={() => setRescheduleItem(item)}
+                    onGenerateCaption={() => setCaptionItem(item)}
                     retrying={retryMutation.isPending}
                     cancelling={cancelMutation.isPending}
                   />
@@ -210,6 +212,17 @@ export default function QueuePage() {
           }}
         />
       )}
+      {captionItem && (
+        <GenerateCaptionDialog
+          item={captionItem}
+          onClose={() => setCaptionItem(null)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.queue });
+            queryClient.invalidateQueries({ queryKey: queryKeys.videos() });
+            queryClient.invalidateQueries({ queryKey: queryKeys.video(captionItem.videoId) });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -228,6 +241,7 @@ function QueueRow({
   onRetry,
   onCancel,
   onReschedule,
+  onGenerateCaption,
   retrying,
   cancelling,
 }: {
@@ -235,6 +249,7 @@ function QueueRow({
   onRetry: () => void;
   onCancel: () => void;
   onReschedule: () => void;
+  onGenerateCaption: () => void;
   retrying: boolean;
   cancelling: boolean;
 }) {
@@ -253,7 +268,10 @@ function QueueRow({
               <Clock className="size-4" />
             </div>
           )}
-          <span className="max-w-[200px] truncate text-sm font-medium">{item.videoTitle}</span>
+          <div className="min-w-0">
+            <span className="block max-w-[200px] truncate text-sm font-medium">{item.videoTitle}</span>
+            {item.caption ? <span className="block max-w-[200px] truncate text-[11px] text-muted-foreground">{item.caption}</span> : null}
+          </div>
         </div>
       </TableCell>
       <TableCell className="text-sm">{item.accountUsername}</TableCell>
@@ -292,6 +310,12 @@ function QueueRow({
           {canCancel && (
             <Button variant="ghost" size="sm" onClick={onReschedule}>
               Reschedule
+            </Button>
+          )}
+          {item.status !== 'CANCELLED' && (
+            <Button variant="ghost" size="sm" onClick={onGenerateCaption}>
+              <Sparkles />
+              Caption
             </Button>
           )}
         </div>
@@ -383,6 +407,123 @@ function RescheduleDialog({
           </Button>
         </DialogFooter>
       </form>
+    </Dialog>
+  );
+}
+
+function GenerateCaptionDialog({
+  item,
+  onClose,
+  onSaved,
+}: {
+  item: QueueItemDto;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [generating, setGenerating] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [model, setModel] = useState<string | null>(null);
+  const [caption, setCaption] = useState('');
+  const [hashtags, setHashtags] = useState('');
+  const [regen, setRegen] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const generate = async () => {
+      setGenerating(true);
+      setGenError(null);
+      setModel(null);
+      try {
+        const result = await apiFetch<GenerateCaptionResult>(`/api/videos/${item.videoId}/caption/generate`, {
+          method: 'POST',
+          json: {},
+        });
+        if (cancelled) return;
+        setCaption(result.caption);
+        setHashtags(result.hashtags);
+        setModel(result.model);
+      } catch (err) {
+        if (!cancelled) setGenError(err instanceof ApiClientError ? err.message : 'Failed to generate caption');
+      } finally {
+        if (!cancelled) setGenerating(false);
+      }
+    };
+    generate();
+    return () => {
+      cancelled = true;
+    };
+  }, [item.videoId, regen]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setGenError(null);
+    try {
+      await apiFetch(`/api/videos/${item.videoId}`, {
+        method: 'PATCH',
+        json: { caption: caption.trim() || null, hashtags: hashtags.trim() || null },
+      });
+      toast.success('Caption saved');
+      onSaved();
+      onClose();
+    } catch (err) {
+      setGenError(err instanceof ApiClientError ? err.message : 'Failed to save the caption');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const busy = generating || saving;
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogHeader>
+        <DialogTitle>Generate caption</DialogTitle>
+        <DialogDescription>Generate a caption for "{item.videoTitle}"</DialogDescription>
+      </DialogHeader>
+      <DialogBody>
+        {generating ? (
+          <p className="text-xs text-muted-foreground">Generating caption from the thumbnail…</p>
+        ) : (
+          <div className="space-y-2">
+            {genError && <p className="text-xs text-error">{genError}</p>}
+            {!genError && item.caption ? (
+              <p className="text-xs text-muted-foreground">Current caption: {item.caption}</p>
+            ) : null}
+            <div className="space-y-1">
+              <Label htmlFor="caption-captions">Caption</Label>
+              <Textarea
+                id="caption-captions"
+                rows={5}
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                disabled={busy}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="caption-hashtags">Hashtags</Label>
+              <Input
+                id="caption-hashtags"
+                value={hashtags}
+                onChange={(e) => setHashtags(e.target.value)}
+                disabled={busy}
+              />
+            </div>
+            {model && <p className="text-xs text-muted-foreground">Generated by {model}</p>}
+          </div>
+        )}
+      </DialogBody>
+      <DialogFooter>
+        <Button variant="outline" onClick={() => setRegen((n) => n + 1)} disabled={busy}>
+          Regenerate
+        </Button>
+        <Button variant="outline" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button onClick={handleSave} disabled={busy || (!caption.trim() && !hashtags.trim())}>
+          {saving ? 'Saving...' : 'Save'}
+        </Button>
+      </DialogFooter>
     </Dialog>
   );
 }

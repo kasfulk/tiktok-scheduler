@@ -12,10 +12,11 @@ import type {
   PostingSettingsDto,
   AccountDto,
   HealthResponse,
+  AiSettingsDto,
 } from '@/lib/types';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input, Select, Label, FieldError } from '@/components/ui/input';
+import { Input, Textarea, Select, Label, FieldError } from '@/components/ui/input';
 import { Switch } from '@/components/ui/toggle';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Tabs } from '@/components/ui/tabs';
@@ -29,6 +30,7 @@ const TABS = [
   { value: 'posting', label: 'Posting Schedule' },
   { value: 'accounts', label: 'Accounts' },
   { value: 'api', label: 'API & Worker' },
+  { value: 'ai', label: 'AI Caption' },
 ] as const;
 
 export default function SettingsPage() {
@@ -47,6 +49,7 @@ export default function SettingsPage() {
       {tab === 'posting' ? <PostingTab /> : null}
       {tab === 'accounts' ? <AccountsTab /> : null}
       {tab === 'api' ? <ApiTab /> : null}
+      {tab === 'ai' ? <AiTab /> : null}
     </div>
   );
 }
@@ -670,5 +673,205 @@ function StatusDot({ ok }: { ok: boolean }) {
       className={cn('inline-block size-2 rounded-full', ok ? 'bg-success' : 'bg-error')}
       aria-label={ok ? 'Healthy' : 'Unhealthy'}
     />
+  );
+}
+/* ─── AI Caption ─────────────────────────────────────────────────────────── */
+
+function AiTab() {
+  const queryClient = useQueryClient();
+  const [apiKey, setApiKey] = useState('');
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: queryKeys.aiSettings,
+    queryFn: () => apiFetch<AiSettingsDto>('/api/settings/ai'),
+  });
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    setError,
+    watch,
+    formState: { errors, isDirty },
+  } = useForm<{ enabled: boolean; baseUrl: string; model: string; prompt: string }>({
+    values: data
+      ? { enabled: data.enabled, baseUrl: data.baseUrl, model: data.model, prompt: data.prompt }
+      : undefined,
+    disabled: isLoading || isError,
+  });
+
+  const clearKey = useMutation({
+    mutationFn: () => apiFetch<AiSettingsDto>('/api/settings/ai', { method: 'PATCH', json: { apiKey: null } }),
+    onSuccess: () => {
+      setApiKey('');
+      queryClient.invalidateQueries({ queryKey: queryKeys.aiSettings });
+      toast.success('API key cleared');
+    },
+    onError: (error: ApiClientError) => toast.error(error.message),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (values: { enabled: boolean; baseUrl: string; model: string; prompt: string }) =>
+      apiFetch<AiSettingsDto>('/api/settings/ai', {
+        method: 'PATCH',
+        json: {
+          ...values,
+          prompt: values.prompt.trim() || null,
+          ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+        },
+      }),
+    onSuccess: () => {
+      setApiKey('');
+      queryClient.invalidateQueries({ queryKey: queryKeys.aiSettings });
+      toast.success('AI settings saved');
+    },
+    onError: (error: ApiClientError) => {
+      toast.error(error.message);
+      const details = error.details as Array<{ path: string; message: string }> | undefined;
+      if (Array.isArray(details)) {
+        for (const d of details) {
+          setError(d.path as 'enabled' | 'baseUrl' | 'model' | 'prompt', { message: d.message });
+        }
+      }
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="space-y-4 py-8">
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-xs text-error">
+          Failed to load settings.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const enabled = watch('enabled');
+  const model = watch('model');
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>AI Caption</CardTitle>
+        <CardDescription>
+          Draft captions for queue items using a local vision model.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          onSubmit={handleSubmit((values) => mutation.mutate(values))}
+          className="space-y-4"
+          noValidate
+        >
+          <div className="flex items-center justify-between rounded-lg border border-border p-3">
+            <div>
+              <Label htmlFor="ai-enabled" className="text-sm font-medium text-foreground">
+                Enable AI caption generation
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                Drafts captions from the thumbnail using a local vision model.
+              </p>
+            </div>
+            <Controller
+              name="enabled"
+              control={control}
+              render={({ field }) => (
+                <Switch
+                  id="ai-enabled"
+                  label="Enable AI caption generation"
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ai-base-url">Base URL</Label>
+            <Input
+              id="ai-base-url"
+              placeholder="http://127.0.0.1:11434/v1"
+              {...register('baseUrl')}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              OpenAI-compatible endpoint (Ollama /v1, LM Studio, llama.cpp, vLLM).
+            </p>
+            <FieldError>{errors.baseUrl?.message}</FieldError>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ai-model">Model</Label>
+            <Input id="ai-model" placeholder="e.g. llava:13b" {...register('model')} />
+            <p className="text-[11px] text-muted-foreground">The model must accept images as input.</p>
+            <FieldError>{errors.model?.message}</FieldError>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ai-api-key">API key</Label>
+            <Input
+              id="ai-api-key"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={
+                data.hasApiKey
+                  ? `Stored (${data.apiKeyMasked}) — leave blank to keep`
+                  : 'Optional'
+              }
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Stored encrypted with <code className="tabular">TOKEN_ENCRYPTION_KEY</code>; never shown again.
+            </p>
+            {data.hasApiKey ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                disabled={clearKey.isPending}
+                onClick={() => clearKey.mutate()}
+              >
+                {clearKey.isPending ? 'Clearing…' : 'Clear key'}
+              </Button>
+            ) : null}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ai-prompt">Prompt</Label>
+            <Textarea id="ai-prompt" placeholder={data.defaultPrompt} {...register('prompt')} />
+            <p className="text-[11px] text-muted-foreground">
+              Leaving this empty uses the default prompt.
+            </p>
+            <FieldError>{errors.prompt?.message}</FieldError>
+          </div>
+
+          {enabled && !model.trim() ? (
+            <p className="text-[11px] text-muted-foreground">
+              Generation stays unavailable until a model is set.
+            </p>
+          ) : null}
+
+          <div className="flex justify-end border-t border-border pt-4">
+            <Button
+              type="submit"
+              disabled={mutation.isPending || (!isDirty && apiKey.trim() === '')}
+            >
+              {mutation.isPending ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

@@ -14,7 +14,7 @@ export const GET = route(async ({ user }) => {
       orderBy: { scheduledAt: 'asc' },
       take: 100,
       include: {
-        video: { select: { title: true, thumbnailKey: true } },
+        video: { select: { title: true, thumbnailKey: true, caption: true, hashtags: true } },
         account: { select: { username: true } },
       },
     }),
@@ -25,8 +25,11 @@ export const GET = route(async ({ user }) => {
     counts: snapshot.counts,
     items: posts.map((post) => ({
       id: post.id,
+      videoId: post.videoId,
       videoTitle: post.video.title,
       thumbnailUrl: post.video.thumbnailKey ? `/api/media/thumbnails/${post.videoId}` : null,
+      caption: post.video.caption,
+      hashtags: post.video.hashtags,
       accountUsername: post.account.username,
       scheduledAt: post.scheduledAt.toISOString(),
       localTime: formatLocalTime(post.scheduledAt, post.timezone || user.timezone),

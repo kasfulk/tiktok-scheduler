@@ -87,8 +87,12 @@ export interface GenerateScheduleResult {
 
 export interface QueueItemDto {
   id: string;
+  videoId: string;
   videoTitle: string;
   thumbnailUrl: string | null;
+  /** Raw video caption/hashtags; the worker composes both into the published caption. */
+  caption: string | null;
+  hashtags: string | null;
   accountUsername: string;
   scheduledAt: string;
   localTime: string;
@@ -146,6 +150,24 @@ export interface GeneralSettingsDto {
   defaultAccountId: string | null;
   telegramEnabled: boolean;
   telegramChatId: string | null;
+}
+
+export interface AiSettingsDto {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  /** The stored key never leaves the server; the UI only learns whether one exists. */
+  hasApiKey: boolean;
+  apiKeyMasked: string | null;
+  /** Effective prompt: the stored prompt, or `defaultPrompt` when none is stored. */
+  prompt: string;
+  defaultPrompt: string;
+}
+
+export interface GenerateCaptionResult {
+  caption: string;
+  hashtags: string;
+  model: string;
 }
 
 export interface CaptionTemplateDto {
