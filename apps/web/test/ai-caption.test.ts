@@ -160,4 +160,24 @@ describe('generateCaption', () => {
       }),
     ).rejects.toMatchObject({ message: expect.stringContaining('500') });
   });
+
+  it('ignores an SSE trailer appended to the JSON body', async () => {
+    // Some OpenAI-compatible proxies answer a non-streaming request with `{...}data: [DONE]`.
+    const body =
+      JSON.stringify({ choices: [{ message: { content: '{"caption":"Trailer","hashtags":"#t"}' } }] }) +
+      'data: [DONE]\n\n';
+    const fetchImpl = (async () =>
+      new Response(body, { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+
+    const result = await generateCaption({
+      config,
+      prompt: 'Make a caption',
+      existingCaption: null,
+      title: 'My Video',
+      imageBase64: null,
+      fetchImpl,
+    });
+    expect(result.caption).toBe('Trailer');
+    expect(result.hashtags).toBe('#t');
+  });
 });

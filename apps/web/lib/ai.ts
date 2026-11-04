@@ -128,6 +128,38 @@ export function parseCaptionResponse(raw: string): { caption: string; hashtags: 
   };
 }
 
+/**
+ * Parse the first complete JSON value in `text`.
+ *
+ * OpenAI-compatible proxies sometimes append an SSE trailer (`data: [DONE]`) to a non-streaming
+ * JSON body, which makes `response.json()` throw "Unexpected non-whitespace character after JSON".
+ * Scanning for the balanced object tolerates that trailing junk.
+ */
+export function parseFirstJson(text: string): unknown {
+  const start = text.search(/[[{]/);
+  if (start === -1) throw new SyntaxError('No JSON object in the response');
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{' || ch === '[') depth += 1;
+    else if (ch === '}' || ch === ']') {
+      depth -= 1;
+      if (depth === 0) return JSON.parse(text.slice(start, i + 1));
+    }
+  }
+  throw new SyntaxError('Incomplete JSON in the response');
+}
+
 export async function generateCaption(input: {
   config: AiCaptionConfig;
   prompt: string;
@@ -185,7 +217,7 @@ export async function generateCaption(input: {
     throw new Error(`Model returned ${response.status}: ${text}`);
   }
 
-  const data: unknown = await response.json();
+  const data: unknown = parseFirstJson(await response.text());
   let contentStr: string | undefined;
   if (data && typeof data === 'object' && 'choices' in data) {
     const choice = Array.isArray(data.choices) ? data.choices[0] : undefined;
