@@ -107,7 +107,7 @@ export interface ScheduledPostRow {
   errorMessage: string | null;
   publishMethod: string;
   createdAt: Date;
-  video: { id: string; title: string; thumbnailKey: string | null; duration: number };
+  video: { id: string; title: string; caption: string | null; thumbnailKey: string | null; duration: number };
   account: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
 }
 
@@ -132,6 +132,7 @@ export function postToDto(post: ScheduledPostRow, fallbackTimezone: string): Sch
     video: {
       id: post.video.id,
       title: post.video.title,
+      caption: post.video.caption,
       thumbnailUrl: post.video.thumbnailKey ? `/api/media/thumbnails/${post.video.id}` : null,
       duration: post.video.duration,
     },

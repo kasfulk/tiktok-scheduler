@@ -4,7 +4,7 @@ import { ok, pagination, parseQuery, route } from '@/lib/api';
 import { postToDto } from '@/lib/dto';
 
 const include = {
-  video: { select: { id: true, title: true, thumbnailKey: true, duration: true } },
+  video: { select: { id: true, title: true, caption: true, thumbnailKey: true, duration: true } },
   account: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
 };
 

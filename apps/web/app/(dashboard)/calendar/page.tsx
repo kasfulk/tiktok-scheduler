@@ -719,7 +719,7 @@ function PostDialog({
     return local.toISOString().slice(0, 16);
   });
   const [accountId, setAccountId] = useState(post.accountId);
-  const [caption, setCaption] = useState(post.video.title);
+  const [caption, setCaption] = useState(post.video.caption ?? '');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

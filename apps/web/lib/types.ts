@@ -66,7 +66,7 @@ export interface ScheduledPostDto {
   errorMessage: string | null;
   publishMethod: PublishMethod;
   createdAt: string;
-  video: { id: string; title: string; thumbnailUrl: string | null; duration: number };
+  video: { id: string; title: string; caption: string | null; thumbnailUrl: string | null; duration: number };
   account: { id: string; username: string; displayName: string | null; avatarUrl: string | null };
 }
 

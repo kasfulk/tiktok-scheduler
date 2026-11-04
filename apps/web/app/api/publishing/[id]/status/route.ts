@@ -7,7 +7,7 @@ export const GET = route(async ({ user, params }) => {
   const post = await prisma.scheduledPost.findFirst({
     where: { id, account: { userId: user.id } },
     include: {
-      video: { select: { id: true, title: true, thumbnailKey: true, duration: true } },
+      video: { select: { id: true, title: true, caption: true, thumbnailKey: true, duration: true } },
       account: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
       logs: { orderBy: { createdAt: 'desc' }, take: 50 },
     },

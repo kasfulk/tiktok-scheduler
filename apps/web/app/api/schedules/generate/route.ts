@@ -43,7 +43,7 @@ export const POST = route(
         where: { id: { in: created.postIds } },
         orderBy: { scheduledAt: 'asc' },
         include: {
-          video: { select: { id: true, title: true, thumbnailKey: true, duration: true } },
+          video: { select: { id: true, title: true, caption: true, thumbnailKey: true, duration: true } },
           account: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
         },
       });

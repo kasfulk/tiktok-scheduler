@@ -29,7 +29,7 @@ export const GET = route(async ({ request, user }) => {
       skip: (query.page - 1) * query.pageSize,
       take: query.pageSize,
       include: {
-        video: { select: { id: true, title: true, thumbnailKey: true, duration: true } },
+        video: { select: { id: true, title: true, caption: true, thumbnailKey: true, duration: true } },
         account: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
       },
     }),
