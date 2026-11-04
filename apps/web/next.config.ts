@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     '@tiktok-scheduler/scheduler',
     '@tiktok-scheduler/db',
     '@tiktok-scheduler/tiktok',
+    '@tiktok-scheduler/browser',
     '@tiktok-scheduler/media',
     '@tiktok-scheduler/queue',
   ],

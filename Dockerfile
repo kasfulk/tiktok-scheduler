@@ -15,6 +15,7 @@ COPY packages/queue/package.json packages/queue/
 COPY packages/media/package.json packages/media/
 COPY packages/scheduler/package.json packages/scheduler/
 COPY packages/tiktok/package.json packages/tiktok/
+COPY packages/browser/package.json packages/browser/
 RUN npm ci
 
 # --- Build (Prisma client + Next.js production build) ---

@@ -25,7 +25,8 @@ export const POST = route(async ({ user, params }) => {
   const scheduledAt = post.scheduledAt.getTime() > Date.now() ? post.scheduledAt : new Date();
   await prisma.scheduledPost.update({
     where: { id },
-    data: { status: 'PENDING', errorMessage: null, nextAttemptAt: null },
+    // A manual retry gets a fresh budget; otherwise a row already past maxRetries fails instantly.
+    data: { status: 'PENDING', retryCount: 0, errorMessage: null, nextAttemptAt: null },
   });
   const armed = await armPublishJob(id, scheduledAt);
 

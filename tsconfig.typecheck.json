@@ -11,6 +11,7 @@
       "@tiktok-scheduler/db": ["packages/db/src/index.ts"],
       "@tiktok-scheduler/scheduler": ["packages/scheduler/src/index.ts"],
       "@tiktok-scheduler/tiktok": ["packages/tiktok/src/index.ts"],
+      "@tiktok-scheduler/browser": ["packages/browser/src/index.ts"],
       "@tiktok-scheduler/shared": ["packages/shared/src/index.ts"]
     }
   },

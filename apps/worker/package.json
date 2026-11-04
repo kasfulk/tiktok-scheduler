@@ -9,6 +9,7 @@
     "health": "tsx src/health.ts"
   },
   "dependencies": {
+    "@tiktok-scheduler/browser": "*",
     "@tiktok-scheduler/db": "*",
     "@tiktok-scheduler/scheduler": "*",
     "@tiktok-scheduler/shared": "*",

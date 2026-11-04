@@ -2,17 +2,20 @@ import { stat } from 'node:fs/promises';
 import {
   armPublishJob,
   countDayCapacity,
+
   getEffectivePolicy,
   lastPostInstant,
   prisma,
   SchedulingError,
 } from '@tiktok-scheduler/db';
 import { absolutePathFor } from '@tiktok-scheduler/media';
+import { BrowserError, publishViaStudio } from '@tiktok-scheduler/browser';
 import { acquireLock, enqueueDeadLetter } from '@tiktok-scheduler/queue';
 import { TIKTOK_CAPTION_MAX_LENGTH, formatLocalDate, log, type NotificationType } from '@tiktok-scheduler/shared';
 import { TikTokApiError, type TikTokClient } from '@tiktok-scheduler/tiktok';
 import { backoffMs, createClient, demoMode, maxRetries, publishTimeoutMs, tiktokMode } from './config.js';
 import { notify } from './notifier.js';
+import { importBrowserSessionBeforePublish } from './browser-session.js';
 import { ensureAccessToken } from './tokens.js';
 
 export type PublishOutcome = 'PUBLISHED' | 'FAILED' | 'RETRY' | 'MANUAL' | 'SKIPPED';
@@ -129,18 +132,6 @@ export async function publishPost(params: {
       });
     }
 
-    // Browser-session accounts carry no API token: they only publish on a demo instance.
-    // Elsewhere failing here beats a confusing 401 from TikTok.
-    const browserAccount = post.account.authMode === 'BROWSER';
-    if (browserAccount && !ctx.demo) {
-      return await failOrRetry(
-        ctx,
-        'BROWSER_ACCOUNT',
-        'This account was imported from a browser session, so it has no API token. Publish it from a demo instance (DEMO_MODE=true with TIKTOK_API_MODE=mock) or reconnect it with OAuth.',
-        { terminal: true, notification: { type: 'PUBLISH_FAILED', title: 'Account uses a browser session' } },
-      );
-    }
-
     const gate = await checkGates(ctx);
     if (gate) return gate;
 
@@ -148,6 +139,13 @@ export async function publishPost(params: {
       await stat(absolutePathFor(post.video.storageKey));
     } catch {
       return await failOrRetry(ctx, 'FILE_MISSING', 'The video file is missing from storage', { terminal: true });
+    }
+
+    // Browser-session accounts carry no API token: the logged-in Chrome is their credential.
+    // Demo keeps going through the mock API so the demo instance never touches a real account.
+    const browserAccount = post.account.authMode === 'BROWSER';
+    if (browserAccount && !ctx.demo) {
+      return await publishThroughBrowser(ctx);
     }
 
     let accessToken: string;
@@ -369,6 +367,69 @@ async function checkGates(ctx: PublishContext): Promise<PublishOutcome | null> {
     }
   }
   return null;
+}
+
+async function publishThroughBrowser(ctx: PublishContext): Promise<PublishOutcome> {
+  const { post } = ctx;
+  const videoPath = absolutePathFor(post.video.storageKey);
+
+  // One Chrome tab, one post at a time: a second flow would fight the first over the same page.
+  // The lease must outlive the studio upload timeout (15 min), not just the API poll deadline.
+  const lease = await acquireLock('browser-publish', Math.max(publishTimeoutMs(), 20 * 60_000)).catch(() => null);
+  if (!lease) {
+    return failOrRetry(ctx, 'BROWSER_BUSY', 'Another browser publish is running; this one goes back in the queue', {
+      terminal: false,
+    });
+  }
+
+  try {
+    // Re-import the session right before posting: the stored cookie jar is a snapshot taken at
+    // setup time, while the browser is the live credential. Same import as the UI button.
+    await importBrowserSessionBeforePublish(post.account);
+    await recordLog(post.id, 'BROWSER_SESSION_IMPORTED', { browserAccount: post.account.username });
+
+    const result = await publishViaStudio({
+      videoPath,
+      caption: composeCaption(post.video),
+      privacyLevel: post.privacyLevel,
+      expectUsername: post.account.username,
+    });
+
+    await recordLog(post.id, 'BROWSER_POST_CONFIRMED', {
+      confirmedBy: result.confirmedBy,
+      permalink: result.permalink,
+      browserAccount: result.profile.username,
+    });
+
+    // Studio exposes no publish id; the confirmation plus permalink is the record we keep.
+    return await markPublished(ctx, `studio-${new Date().toISOString()}`, result.permalink);
+  } catch (error) {
+    if (!(error instanceof BrowserError)) throw error;
+
+    if (error.code === 'POST_UNCONFIRMED') {
+      // The Post click landed but nothing confirmed it: a retry could publish the video twice.
+      return await markManual(ctx, error.code, error.message);
+    }
+    if (error.code === 'NO_TIKTOK_SESSION') {
+      await prisma.tikTokAccount
+        .update({ where: { id: post.account.id }, data: { connectionStatus: 'DISCONNECTED' } })
+        .catch(() => undefined);
+      return await failOrRetry(ctx, error.code, error.message, {
+        terminal: true,
+        notification: { type: 'ACCOUNT_DISCONNECTED', title: 'TikTok login expired in the browser' },
+      });
+    }
+
+    // Everything reaching here failed before the Post click, so a retry cannot double-post. Only a
+    // wrong account or an unsupported runtime is worth failing terminally.
+    const terminal = error.code === 'WRONG_BROWSER_ACCOUNT' || error.code === 'BROWSER_UNSUPPORTED_RUNTIME';
+    return await failOrRetry(ctx, error.code, error.message, {
+      terminal,
+      notification: { type: 'PUBLISH_FAILED', title: 'Browser publish failed' },
+    });
+  } finally {
+    await lease();
+  }
 }
 
 async function pollUntilResolved(

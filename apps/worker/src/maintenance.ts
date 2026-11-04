@@ -30,22 +30,30 @@ export async function sweepDuePosts(limit = 100): Promise<{ armed: number }> {
   return { armed };
 }
 
-/** Re-arm QUEUED posts whose BullMQ job disappeared (Redis restart, manual purge). */
+/**
+ * Re-arm QUEUED posts whose BullMQ job is gone or already finished. A `completed`/`failed` job
+ * keeps its id, so checking existence alone leaves the row QUEUED forever with nothing to run it.
+ */
 export async function rearmOrphanedQueuedPosts(limit = 200): Promise<{ rearmed: number }> {
   const horizon = new Date(Date.now() + 24 * 3600 * 1000);
   const queued = await prisma.scheduledPost.findMany({
     where: { status: 'QUEUED', scheduledAt: { lte: horizon } },
     orderBy: { scheduledAt: 'asc' },
     take: limit,
-    select: { id: true, scheduledAt: true },
+    select: { id: true, scheduledAt: true, nextAttemptAt: true },
   });
 
   const queue = publishQueue();
   let rearmed = 0;
   for (const post of queued) {
     const job = await queue.getJob(publishJobId(post.id));
-    if (job) continue;
-    if (await armPublishJob(post.id, post.scheduledAt)) rearmed += 1;
+    if (job) {
+      const state = await job.getState();
+      if (state === 'active' || state === 'waiting' || state === 'delayed') continue;
+    }
+    // `nextAttemptAt` is the retry backoff written by failOrRetry; ignoring it here would re-arm the
+    // row at `scheduledAt` (already past) and burn all attempts in seconds instead of on schedule.
+    if (await armPublishJob(post.id, post.nextAttemptAt ?? post.scheduledAt)) rearmed += 1;
   }
   if (rearmed > 0) log('info', 'rearmed_orphaned_jobs', { rearmed });
   return { rearmed };

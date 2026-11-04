@@ -1,10 +1,16 @@
+import { BrowserError, captureBrowserSession } from '@tiktok-scheduler/browser';
 import { encryptSecret, prisma } from '@tiktok-scheduler/db';
 import { log } from '@tiktok-scheduler/shared';
 import { ApiError, ok, route } from '@/lib/api';
-import { captureBrowserSession } from '@/lib/cdp';
 import { accountToDto } from '@/lib/dto';
 
 export const runtime = 'nodejs';
+
+/** The shared capture throws BrowserError; the HTTP layer speaks ApiError. */
+function toApiError(error: unknown): never {
+  if (error instanceof BrowserError) throw new ApiError(502, error.code, error.message);
+  throw error;
+}
 
 /**
  * Import a TikTok account from a browser the user logged into manually. The cookie jar is the
@@ -12,7 +18,7 @@ export const runtime = 'nodejs';
  */
 export const POST = route(
   async ({ user }) => {
-    const capture = await captureBrowserSession();
+    const capture = await captureBrowserSession().catch(toApiError);
     const openId = `tt_${capture.profile.openId}`;
 
     const existing = await prisma.tikTokAccount.findUnique({ where: { openId }, select: { userId: true } });

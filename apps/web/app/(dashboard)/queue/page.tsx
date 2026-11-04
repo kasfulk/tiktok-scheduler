@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pause, Play, RefreshCw, X, Calendar, Clock, AlertCircle, Sparkles } from 'lucide-react';
+import { Pause, Play, RefreshCw, X, Calendar, Clock, AlertCircle, Sparkles, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -21,6 +21,7 @@ export default function QueuePage() {
   const [confirmPause, setConfirmPause] = useState(false);
   const [rescheduleItem, setRescheduleItem] = useState<QueueItemDto | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<QueueItemDto | null>(null);
+  const [confirmPublishNow, setConfirmPublishNow] = useState<QueueItemDto | null>(null);
   const [captionItem, setCaptionItem] = useState<QueueItemDto | null>(null);
 
   const { data, isLoading, error } = useQuery({
@@ -57,6 +58,15 @@ export default function QueuePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.queue });
       toast.success('Job queued for retry');
+    },
+    onError: (error: ApiClientError) => toast.error(error.message),
+  });
+
+  const publishNowMutation = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/queue/publish-now/${id}`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.queue });
+      toast.success('Publishing now');
     },
     onError: (error: ApiClientError) => toast.error(error.message),
   });
@@ -161,6 +171,7 @@ export default function QueuePage() {
                     key={item.id}
                     item={item}
                     onRetry={() => retryMutation.mutate(item.id)}
+                    onPublishNow={() => setConfirmPublishNow(item)}
                     onCancel={() => setConfirmCancel(item)}
                     onReschedule={() => setRescheduleItem(item)}
                     onGenerateCaption={() => setCaptionItem(item)}
@@ -185,6 +196,21 @@ export default function QueuePage() {
           setConfirmPause(false);
         }}
         pending={pauseMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={!!confirmPublishNow}
+        onOpenChange={(open) => !open && setConfirmPublishNow(null)}
+        title="Publish this post now?"
+        description="The post leaves the schedule and publishes as soon as a worker is free, using its saved caption and privacy setting. This cannot be undone."
+        confirmLabel="Publish now"
+        onConfirm={() => {
+          if (confirmPublishNow) {
+            publishNowMutation.mutate(confirmPublishNow.id);
+            setConfirmPublishNow(null);
+          }
+        }}
+        pending={publishNowMutation.isPending}
       />
 
       <ConfirmDialog
@@ -239,6 +265,7 @@ function StatPill({ label, value }: { label: string; value: number }) {
 function QueueRow({
   item,
   onRetry,
+  onPublishNow,
   onCancel,
   onReschedule,
   onGenerateCaption,
@@ -247,6 +274,7 @@ function QueueRow({
 }: {
   item: QueueItemDto;
   onRetry: () => void;
+  onPublishNow: () => void;
   onCancel: () => void;
   onReschedule: () => void;
   onGenerateCaption: () => void;
@@ -254,8 +282,11 @@ function QueueRow({
   cancelling: boolean;
 }) {
   const scheduledDate = new Date(item.scheduledAt);
-  const canRetry = item.status === 'FAILED' || item.status === 'MANUAL_ACTION_REQUIRED';
+  // MANUAL_ACTION_REQUIRED stays read-only until a human checks TikTok: the API rejects it (409).
+  const canRetry = item.status === 'FAILED';
   const canCancel = item.status === 'PENDING' || item.status === 'QUEUED';
+  // Same eligibility the publish-now route enforces: a post TikTok may already have is not "now".
+  const canPublishNow = canRetry || canCancel;
 
   return (
     <TableRow>
@@ -299,6 +330,12 @@ function QueueRow({
             <Button variant="ghost" size="sm" onClick={onRetry} disabled={retrying}>
               <RefreshCw />
               Retry
+            </Button>
+          )}
+          {canPublishNow && (
+            <Button variant="ghost" size="sm" onClick={onPublishNow} disabled={cancelling}>
+              <Zap />
+              Post now
             </Button>
           )}
           {canCancel && (

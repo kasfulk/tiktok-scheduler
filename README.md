@@ -37,8 +37,7 @@ worker is exercised in tests.
 
 A second pair of pm2 processes (`tiktok-scheduler-demo-web` / `-demo-worker`, port 3101) runs with
 `DEMO_MODE=true`: its own SQLite file (`data/demo.db`), its own storage and its own Redis database,
-and every publish goes to the in-process mock TikTok instead of the network. That is the only place
-a browser-session account (imported cookies, no API token) can publish. Seed it with:
+and every publish goes to the in-process mock TikTok instead of the network. Seed it with:
 
 ```bash
 DATABASE_URL=file:$PWD/data/demo.db node scripts/seed-demo.mjs
@@ -93,6 +92,7 @@ UID juggling. Harden by switching to a fixed UID once you control those director
 | `BACKUP_RETAIN` / `BACKUP_INTERVAL_HOURS` | `7` / `24` | `VACUUM INTO` snapshots in `data/backups` |
 | `TIKTOK_API_MODE` | `mock` | `live` requires an approved TikTok app |
 | `DEMO_MODE` | `false` | Demo instance: every publish is simulated, so browser-session accounts work end to end |
+| `BROWSER_CDP` | `http://127.0.0.1:9333` | Remote-debugging endpoint of the Chrome you are logged into (browser-mode accounts) |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | — | Optional notification channel |
 
 ## How publishing works
@@ -136,7 +136,47 @@ granted through their audit, a verified domain for the redirect URI, and an acco
 settings allow the chosen privacy level. Until then the scheduler refuses to guess — privacy levels
 are validated against `creator_info`, and direct post availability is never assumed.
 
-There is no browser automation, scraping or unofficial endpoint anywhere in this codebase, by design.
+There is no scraping or unofficial HTTP endpoint anywhere in this codebase. Browser mode (below) is the
+one place we touch TikTok outside the official API, and it drives the visible Studio page exactly as a
+logged-in person would.
+
+## Browser mode (accounts imported from a logged-in browser)
+
+An account can be imported from a Chrome profile that is already logged into TikTok (Accounts →
+*Connect via browser*, `POST /api/tiktok/accounts/browser`). Such a row has `authMode = BROWSER`,
+stores the encrypted cookie jar, and carries no API token.
+
+Publishing for it does not call the API. The worker drives TikTok Studio through the Chrome
+DevTools Protocol (`packages/browser`): opens `tiktokstudio/upload` in the debugged browser, attaches
+the file with `DOM.setFileInputFiles`, types the caption, sets the visibility from the scheduled
+privacy level, clicks Post, and waits for Studio's own confirmation.
+
+Requirements:
+
+- Node >= 22 for the worker (the CDP client uses the built-in WebSocket).
+- Chrome started with `--remote-debugging-port` and a persistent `--user-data-dir`, logged into the
+  target account. `BROWSER_CDP` (`.env`) points at it, e.g. `http://127.0.0.1:9333`.
+- The account in that browser must match the account row; a mismatch aborts with
+  `WRONG_BROWSER_ACCOUNT` instead of posting to the wrong profile.
+- `DEMO_MODE=true` instances still use the mock API for browser accounts, so demo runs never touch a
+  real profile.
+
+Failure handling differs from the API path because Studio exposes no publish id:
+
+- Nothing was clicked yet (browser unreachable, upload rejected, caption or privacy not applied) →
+  a normal retry or a terminal failure, whichever the code says.
+- Post was clicked but Studio never confirmed → `MANUAL_ACTION_REQUIRED`, because a retry could
+  publish twice. Check the account in Studio before requeueing.
+- The session is gone (`NO_TIKTOK_SESSION`) → the account is marked `DISCONNECTED` and you are notified.
+
+Verify the flow without publishing anything:
+
+```bash
+BROWSER_CDP=http://127.0.0.1:9333 \
+  ./node_modules/.bin/tsx scripts/browser-dry-run.ts storage/videos/<file>.mp4 "caption"
+```
+
+It uploads, fills the form, prints the caption/visibility it actually observed, then discards the post.
 
 ## AI caption generation (local vision model)
 
@@ -175,6 +215,7 @@ packages/scheduler  Pure scheduling engine (no I/O) — the four modes live here
 packages/tiktok TikTok client + in-process fake API for tests/mock mode
 packages/queue  BullMQ queues, job ids, Redis connections
 packages/media  Upload validation, FFprobe/FFmpeg, storage keys
+packages/browser  Chrome DevTools Protocol client + TikTok Studio publish flow (browser mode)
 ```
 
 Design notes and tradeoffs are in `SYSTEM_DESIGN.md`; the phased build plan is in

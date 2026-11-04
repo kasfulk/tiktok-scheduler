@@ -50,7 +50,9 @@ async function bootstrap(): Promise<void> {
     {
       connection: createRedisConnection('worker-publish'),
       concurrency: workerConcurrency(),
-      lockDuration: publishTimeoutMs() + 60_000,
+      // Must cover a browser-mode publish: 15 min studio upload + 2 min confirmation, on top of the
+      // API poll deadline. A lock that expires mid-publish lets BullMQ re-run the job = double post.
+      lockDuration: Math.max(publishTimeoutMs(), 20 * 60_000) + 60_000,
       stalledInterval: 60_000,
       maxStalledCount: 2,
     },

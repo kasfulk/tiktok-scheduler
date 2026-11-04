@@ -10,6 +10,7 @@
   "dependencies": {
     "@hookform/resolvers": "^7.0.0",
     "@tanstack/react-query": "^5.105.0",
+    "@tiktok-scheduler/browser": "*",
     "@tiktok-scheduler/db": "*",
     "@tiktok-scheduler/scheduler": "*",
     "@tiktok-scheduler/shared": "*",
