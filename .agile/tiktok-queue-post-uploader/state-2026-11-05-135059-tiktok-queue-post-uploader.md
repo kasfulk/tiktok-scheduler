@@ -16,9 +16,11 @@ notes: >
   Root cause: the dialog sent `startTime` only for FIXED_TIME, so INTERVAL/SMART plans fell back to
   `activeHours.start`; SMART also omitted `intervalMinutes`, which the schema requires (422).
   Fix: `buildGenerateScheduleBody` builds the payload (INTERVAL/SMART anchor on start time + interval,
-  FIXED_TIME on posting times) and rejects times outside the active hours; the dialog now exposes
-  Start time and Interval for both interval modes, gains an add-time control for fixed mode, drops
-  the ignored Start time field there, and defaults Start date to the user's local day.
+  FIXED_TIME on posting times) and rejects times outside the active hours; a malformed clock (e.g.
+  `9:30`) returns `{ ok: false, error: 'Start time must be a valid HH:mm time' }` via
+  `isValidLocalTime` instead of throwing from `timeToMinutes`. The dialog exposes Start time and
+  Interval for both interval modes, gains an add-time control for fixed mode, drops the ignored
+  Start time field there, and defaults Start date to the user's local day.
 excluded_from_diff:
   - apps/worker/test/publish.test.ts — collection error for @tiktok-scheduler/browser, identical
     with this change stashed (pre-existing, surfaced only because local Redis enables those tests)
