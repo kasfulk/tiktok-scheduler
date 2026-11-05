@@ -131,11 +131,18 @@ export const reschedulePostSchema = z.object({
   accountId: z.string().min(1).optional(),
 });
 
-export const rescheduleBatchSchema = z.object({
-  startDate: localDate,
-  startTime: localTime.optional(),
-  videoIds: z.array(z.string().min(1)).min(1).max(500).optional(),
-});
+export const massRescheduleSchema = z.discriminatedUnion('mode', [
+  z.object({
+    postIds: z.array(z.string().min(1)).min(1).max(200),
+    mode: z.literal('TIME'),
+    time: localTime,
+  }),
+  z.object({
+    postIds: z.array(z.string().min(1)).min(1).max(200),
+    mode: z.literal('DATE'),
+    date: localDate,
+  }),
+]);
 
 export const scheduledPostStatusFilterSchema = z.enum(SCHEDULED_POST_STATUSES);
 
@@ -252,6 +259,7 @@ export type PostingSettingsInput = z.infer<typeof postingSettingsSchema>;
 export type AccountPostingSettingsInput = z.infer<typeof accountPostingSettingsSchema>;
 export type CaptionTemplateInput = z.infer<typeof captionTemplateSchema>;
 export type ReschedulePostInput = z.infer<typeof reschedulePostSchema>;
+export type MassRescheduleInput = z.infer<typeof massRescheduleSchema>;
 export type BulkCaptionInput = z.infer<typeof bulkCaptionSchema>;
 export type GeneralSettingsInput = z.infer<typeof generalSettingsSchema>;
 export type ListVideosQuery = z.infer<typeof listVideosQuerySchema>;

@@ -12,6 +12,7 @@ import {
 import { generateSchedule, type ScheduleSlot } from '@tiktok-scheduler/scheduler';
 import { cancelPublishJob, schedulePublishJob } from '@tiktok-scheduler/queue';
 import { prisma } from './client';
+import { computeMassRescheduleInstant, type MassRescheduleMode } from './mass-schedule';
 import { countDayCapacity, lastPostInstant, loadOccupancy } from './occupancy';
 import { getEffectivePolicy } from './settings';
 
@@ -323,6 +324,115 @@ export async function rescheduleScheduledPost(params: {
   });
 
   return { id: post.id };
+}
+
+export interface MassRescheduleResult {
+  updated: number;
+  staggered: number;
+  skipped: { id: string; code: string; message: string }[];
+}
+
+/**
+ * Bulk wall-clock edit: `TIME` sets the local time and keeps each post's date, `DATE` sets the
+ * local date and keeps each post's time. Capacity/interval rules are deliberately not re-checked —
+ * the user is moving their own pending queue — but immutable rows are skipped and reported, and
+ * same-account posts that would land on the same instant are spaced one minute apart.
+ */
+export async function massReschedulePosts(params: {
+  userId: string;
+  postIds: string[];
+  mode: MassRescheduleMode;
+  value: string;
+  fallbackTimezone: string;
+}): Promise<MassRescheduleResult> {
+  const postIds = Array.from(new Set(params.postIds));
+  const posts = await prisma.scheduledPost.findMany({
+    where: { id: { in: postIds }, account: { userId: params.userId } },
+    select: {
+      id: true,
+      accountId: true,
+      status: true,
+      scheduledAt: true,
+      timezone: true,
+      video: { select: { title: true } },
+    },
+  });
+
+  const skipped: MassRescheduleResult['skipped'] = [];
+  const known = new Set(posts.map((post) => post.id));
+  for (const id of postIds) {
+    if (!known.has(id)) skipped.push({ id, code: 'POST_NOT_FOUND', message: 'Scheduled post not found' });
+  }
+
+  const mutable = posts
+    .filter((post) => {
+      if (['PENDING', 'QUEUED', 'FAILED'].includes(post.status)) return true;
+      skipped.push({
+        id: post.id,
+        code: 'POST_IMMUTABLE',
+        message: `A ${post.status.toLowerCase()} post cannot be rescheduled`,
+      });
+      return false;
+    })
+    .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
+
+  const used = new Set<string>();
+  let staggered = 0;
+  const moves = mutable.map((post) => {
+    const timezone = post.timezone || params.fallbackTimezone;
+    let scheduledAt = computeMassRescheduleInstant(post.scheduledAt, params.mode, params.value, timezone);
+    const key = () => `${post.accountId}:${scheduledAt.getTime()}`;
+    const original = scheduledAt.getTime();
+    while (used.has(key())) {
+      scheduledAt = new Date(scheduledAt.getTime() + 60_000);
+    }
+    if (scheduledAt.getTime() !== original) staggered += 1;
+    used.add(key());
+    return { post, scheduledAt };
+  });
+
+  if (moves.length > 0) {
+    await prisma.$transaction(
+      async (tx) => {
+        for (const move of moves) {
+          await tx.scheduledPost.update({
+            where: { id: move.post.id },
+            data: { scheduledAt: move.scheduledAt, status: 'PENDING', nextAttemptAt: null, errorMessage: null },
+          });
+        }
+        await tx.publishingLog.createMany({
+          data: moves.map((move) => ({
+            scheduledPostId: move.post.id,
+            event: 'SCHEDULE_CHANGED',
+            requestMetadata: JSON.stringify({
+              bulk: true,
+              mode: params.mode,
+              scheduledAt: move.scheduledAt.toISOString(),
+              accountId: move.post.accountId,
+            }),
+          })),
+        });
+        await tx.notification.create({
+          data: {
+            userId: params.userId,
+            type: 'SCHEDULE_CHANGED',
+            title: 'Schedule updated',
+            message: `${moves.length} post(s) rescheduled: ${
+              params.mode === 'TIME' ? `time set to ${params.value}` : `date set to ${params.value}`
+            }.`,
+          },
+        });
+      },
+      { timeout: 20_000 },
+    );
+
+    for (const move of moves) {
+      await cancelPublishJob(move.post.id);
+      await armPublishJob(move.post.id, move.scheduledAt);
+    }
+  }
+
+  return { updated: moves.length, staggered, skipped };
 }
 
 export async function cancelScheduledPost(params: { userId: string; postId: string }): Promise<{ id: string }> {

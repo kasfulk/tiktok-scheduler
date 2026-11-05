@@ -6,15 +6,19 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { apiFetch, queryKeys, ApiClientError } from '@/lib/api-client';
-import type { QueueResponse, QueueItemDto, GenerateCaptionResult } from '@/lib/types';
+import type { QueueResponse, QueueItemDto, GenerateCaptionResult, MassRescheduleResult } from '@/lib/types';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConfirmDialog, Dialog, DialogHeader, DialogTitle, DialogDescription, DialogBody, DialogFooter } from '@/components/ui/dialog';
 import { Input, Textarea, Label } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/toggle';
 import { Skeleton } from '@/components/ui/progress';
 import { EmptyState, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
+
+const isMassSelectable = (item: QueueItemDto) =>
+  item.status === 'PENDING' || item.status === 'QUEUED' || item.status === 'FAILED';
 
 export default function QueuePage() {
   const queryClient = useQueryClient();
@@ -23,6 +27,8 @@ export default function QueuePage() {
   const [confirmCancel, setConfirmCancel] = useState<QueueItemDto | null>(null);
   const [confirmPublishNow, setConfirmPublishNow] = useState<QueueItemDto | null>(null);
   const [captionItem, setCaptionItem] = useState<QueueItemDto | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [massOpen, setMassOpen] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.queue,
@@ -82,6 +88,19 @@ export default function QueuePage() {
   });
 
   const sortedItems = data?.items.slice().sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()) ?? [];
+  const selectableItems = sortedItems.filter(isMassSelectable);
+  const allSelected = selectableItems.length > 0 && selectableItems.every((item) => selectedIds.has(item.id));
+  const someSelected = !allSelected && selectableItems.some((item) => selectedIds.has(item.id));
+
+  // The queue polls every 10s; drop ids that left the queue or became non-selectable.
+  useEffect(() => {
+    if (!data) return;
+    const live = new Set(data.items.filter(isMassSelectable).map((item) => item.id));
+    setSelectedIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => live.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [data]);
 
   if (error) {
     return (
@@ -107,20 +126,34 @@ export default function QueuePage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Publishing Queue</h1>
-        {data && (
-          <div className="flex items-center gap-2">
-            {data.paused && <Badge variant="warning">Paused</Badge>}
-            <Button
-              variant={data.paused ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => (data.paused ? resumeMutation.mutate() : setConfirmPause(true))}
-              disabled={pauseMutation.isPending || resumeMutation.isPending}
-            >
-              {data.paused ? <Play /> : <Pause />}
-              {data.paused ? 'Resume' : 'Pause'}
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-sm text-muted-foreground">{selectedIds.size} selected</span>
+              <Button size="sm" onClick={() => setMassOpen(true)}>
+                <Clock />
+                Mass schedule
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                Clear
+              </Button>
+            </>
+          )}
+          {data && (
+            <>
+              {data.paused && <Badge variant="warning">Paused</Badge>}
+              <Button
+                variant={data.paused ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => (data.paused ? resumeMutation.mutate() : setConfirmPause(true))}
+                disabled={pauseMutation.isPending || resumeMutation.isPending}
+              >
+                {data.paused ? <Play /> : <Pause />}
+                {data.paused ? 'Resume' : 'Pause'}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {data && (
@@ -156,6 +189,20 @@ export default function QueuePage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      label="Select all"
+                      checked={allSelected}
+                      indeterminate={someSelected}
+                      onChange={(checked) =>
+                        setSelectedIds(
+                          checked
+                            ? new Set(selectableItems.map((item) => item.id))
+                            : new Set(),
+                        )
+                      }
+                    />
+                  </TableHead>
                   <TableHead>Video</TableHead>
                   <TableHead>Account</TableHead>
                   <TableHead>Scheduled</TableHead>
@@ -170,6 +217,16 @@ export default function QueuePage() {
                   <QueueRow
                     key={item.id}
                     item={item}
+                    selected={selectedIds.has(item.id)}
+                    selectable={isMassSelectable(item)}
+                    onSelect={(checked) =>
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (checked) next.add(item.id);
+                        else next.delete(item.id);
+                        return next;
+                      })
+                    }
                     onRetry={() => retryMutation.mutate(item.id)}
                     onPublishNow={() => setConfirmPublishNow(item)}
                     onCancel={() => setConfirmCancel(item)}
@@ -249,6 +306,17 @@ export default function QueuePage() {
           }}
         />
       )}
+      {massOpen && selectedIds.size > 0 && (
+        <MassScheduleDialog
+          items={sortedItems.filter((item) => selectedIds.has(item.id) && isMassSelectable(item))}
+          onClose={() => setMassOpen(false)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.queue });
+            queryClient.invalidateQueries({ queryKey: queryKeys.schedules() });
+            setSelectedIds(new Set());
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -264,6 +332,9 @@ function StatPill({ label, value }: { label: string; value: number }) {
 
 function QueueRow({
   item,
+  selected,
+  selectable,
+  onSelect,
   onRetry,
   onPublishNow,
   onCancel,
@@ -273,6 +344,9 @@ function QueueRow({
   cancelling,
 }: {
   item: QueueItemDto;
+  selected: boolean;
+  selectable: boolean;
+  onSelect: (checked: boolean) => void;
   onRetry: () => void;
   onPublishNow: () => void;
   onCancel: () => void;
@@ -290,6 +364,16 @@ function QueueRow({
 
   return (
     <TableRow>
+      <TableCell>
+        <Checkbox
+          label={`Select ${item.videoTitle}`}
+          checked={selected}
+          onChange={(checked) => {
+            if (!selectable) return;
+            onSelect(checked);
+          }}
+        />
+      </TableCell>
       <TableCell>
         <div className="flex items-center gap-3">
           {item.thumbnailUrl ? (
@@ -561,6 +645,87 @@ function GenerateCaptionDialog({
           {saving ? 'Saving...' : 'Save'}
         </Button>
       </DialogFooter>
+    </Dialog>
+  );
+}
+
+function MassScheduleDialog({ items, onClose, onSaved }: { items: QueueItemDto[]; onClose: () => void; onSaved: () => void }) {
+  const [mode, setMode] = useState<'TIME' | 'DATE'>('TIME');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [date, setDate] = useState(items[0]?.localDate ?? '');
+  const [time, setTime] = useState(items[0]?.localTime ?? '');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPending(true);
+    setError(null);
+    const postIds = items.map((item) => item.id);
+    try {
+      const result = await apiFetch<MassRescheduleResult>('/api/schedules/bulk-reschedule', {
+        method: 'POST',
+        json: mode === 'TIME' ? { postIds, mode, time } : { postIds, mode, date },
+      });
+      toast.success(
+        `${result.updated} post(s) rescheduled${result.staggered > 0 ? `, ${result.staggered} spaced 1 minute apart` : ''}`,
+      );
+      if (result.skipped.length > 0) {
+        toast.warning(`${result.skipped.length} skipped: ${result.skipped[0]!.message}`);
+      }
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : 'Failed to reschedule posts');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const description =
+    mode === 'TIME'
+      ? `${items.length} selected post(s). Dates stay as they are.`
+      : `${items.length} selected post(s). Times stay as they are.`;
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogHeader>
+        <DialogTitle>Mass reschedule</DialogTitle>
+        <DialogDescription>{description}</DialogDescription>
+      </DialogHeader>
+      <form onSubmit={handleSubmit}>
+        <DialogBody>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Button type="button" variant={mode === 'TIME' ? 'default' : 'outline'} onClick={() => setMode('TIME')}>
+                Change time only
+              </Button>
+              <Button type="button" variant={mode === 'DATE' ? 'default' : 'outline'} onClick={() => setMode('DATE')}>
+                Change date only
+              </Button>
+            </div>
+            {mode === 'TIME' ? (
+              <div className="space-y-2">
+                <Label htmlFor="mass-reschedule-time">New time (each post keeps its own date)</Label>
+                <Input id="mass-reschedule-time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="mass-reschedule-date">New date (each post keeps its own time)</Label>
+                <Input id="mass-reschedule-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+              </div>
+            )}
+            {error && <p className="text-xs text-error">{error}</p>}
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={pending}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? 'Saving...' : 'Save'}
+          </Button>
+        </DialogFooter>
+      </form>
     </Dialog>
   );
 }

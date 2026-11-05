@@ -14,15 +14,18 @@ export {
   settingsToJson,
   type EffectivePolicy,
 } from './settings';
+export { computeMassRescheduleInstant, type MassRescheduleMode } from './mass-schedule';
 export {
   SchedulingError,
   armPublishJob,
   cancelScheduledPost,
   createScheduleBatch,
   describeSlot,
+  massReschedulePosts,
   replanUserPendingPosts,
   rescheduleScheduledPost,
   type CreatedSchedule,
+  type MassRescheduleResult,
   type ScheduleRequest,
 } from './scheduling';
 

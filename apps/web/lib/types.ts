@@ -95,6 +95,8 @@ export interface QueueItemDto {
   hashtags: string | null;
   accountUsername: string;
   scheduledAt: string;
+  /** Post wall clock in its own timezone — used to prefill the mass reschedule dialog. */
+  localDate: string;
   localTime: string;
   status: ScheduledPostStatus;
   retryCount: number;
@@ -105,6 +107,12 @@ export interface QueueResponse {
   paused: boolean;
   counts: { active: number; waiting: number; delayed: number; completed: number; failed: number };
   items: QueueItemDto[];
+}
+
+export interface MassRescheduleResult {
+  updated: number;
+  staggered: number;
+  skipped: Array<{ id: string; code: string; message: string }>;
 }
 
 export interface PublishingLogDto {

@@ -1,6 +1,6 @@
 import { prisma } from '@tiktok-scheduler/db';
 import { queueSnapshot } from '@tiktok-scheduler/queue';
-import { formatLocalTime } from '@tiktok-scheduler/shared';
+import { formatLocalDate, formatLocalTime } from '@tiktok-scheduler/shared';
 import { ok, route } from '@/lib/api';
 import type { QueueResponse } from '@/lib/types';
 
@@ -32,6 +32,7 @@ export const GET = route(async ({ user }) => {
       hashtags: post.video.hashtags,
       accountUsername: post.account.username,
       scheduledAt: post.scheduledAt.toISOString(),
+      localDate: formatLocalDate(post.scheduledAt, post.timezone || user.timezone),
       localTime: formatLocalTime(post.scheduledAt, post.timezone || user.timezone),
       status: post.status as QueueResponse['items'][number]['status'],
       retryCount: post.retryCount,
