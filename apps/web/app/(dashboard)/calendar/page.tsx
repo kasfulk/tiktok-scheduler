@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/progress';
 import { Tabs } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { buildGenerateScheduleBody } from '@/lib/schedule-payload';
 import { formatLocalDate, formatLocalTime, localDateTimeToUtc, WEEKDAY_LABELS } from '@tiktok-scheduler/shared';
 
 type ViewMode = 'month' | 'week' | 'day' | 'list';
@@ -898,10 +899,11 @@ function GenerateScheduleDialog({
 }) {
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? '');
   const [mode, setMode] = useState<'INTERVAL' | 'FIXED_TIME' | 'SMART'>('INTERVAL');
-  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => formatLocalDate(new Date(), timezone));
   const [startTime, setStartTime] = useState('09:00');
   const [intervalMinutes, setIntervalMinutes] = useState(60);
   const [postingTimes, setPostingTimes] = useState<string[]>(['09:00', '12:00', '18:00']);
+  const [newPostingTime, setNewPostingTime] = useState('');
   const [dailyLimit, setDailyLimit] = useState(postingSettings?.dailyPostingLimit ?? 5);
   const [activeDays, setActiveDays] = useState<number[]>(postingSettings?.activeDays ?? [1, 2, 3, 4, 5]);
   const [activeHoursStart, setActiveHoursStart] = useState(postingSettings?.activeHoursStart ?? '09:00');
@@ -937,27 +939,32 @@ function GenerateScheduleDialog({
       setError('Please select at least one video');
       return;
     }
+    const built = buildGenerateScheduleBody({
+      videoIds: selectedVideoIds,
+      accountId,
+      mode,
+      startDate,
+      startTime,
+      intervalMinutes,
+      postingTimes,
+      dailyPostingLimit: dailyLimit,
+      activeDays,
+      activeHoursStart,
+      activeHoursEnd,
+      timezone,
+      publishMethod,
+    });
+    if (!built.ok) {
+      setError(built.error);
+      return;
+    }
 
     setPending(true);
     setError(null);
     try {
       const result = await apiFetch<GenerateScheduleResult>('/api/schedules/generate', {
         method: 'POST',
-        json: {
-          videoIds: selectedVideoIds,
-          accountId,
-          schedulingMode: mode,
-          startDate,
-          startTime: mode === 'FIXED_TIME' ? startTime : undefined,
-          intervalMinutes: mode === 'INTERVAL' ? intervalMinutes : undefined,
-          postingTimes: mode === 'FIXED_TIME' ? postingTimes : undefined,
-          dailyPostingLimit: dailyLimit,
-          activeDays,
-          activeHoursStart,
-          activeHoursEnd,
-          timezone,
-          publishMethod,
-        },
+        json: built.body,
       });
 
       toast.success(`${result.posts.length} posts scheduled`);
@@ -1037,36 +1044,49 @@ function GenerateScheduleDialog({
             <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
 
-          {mode === 'INTERVAL' && (
-            <div>
-              <Label>Interval (minutes)</Label>
-              <Input type="number" value={intervalMinutes} onChange={(e) => setIntervalMinutes(Number(e.target.value))} min={1} />
-            </div>
-          )}
-
-          {mode === 'FIXED_TIME' && (
-            <>
+          {mode !== 'FIXED_TIME' && (
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label>Start time</Label>
                 <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
               </div>
               <div>
-                <Label>Posting times</Label>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {postingTimes.map((time, i) => (
-                    <Badge key={i} variant="outline">
-                      {time}
-                      <button
-                        className="ml-1 text-muted-foreground hover:text-foreground"
-                        onClick={() => setPostingTimes(postingTimes.filter((_, j) => j !== i))}
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
+                <Label>Interval (minutes)</Label>
+                <Input type="number" value={intervalMinutes} onChange={(e) => setIntervalMinutes(Number(e.target.value))} min={1} />
               </div>
-            </>
+            </div>
+          )}
+
+          {mode === 'FIXED_TIME' && (
+            <div>
+              <Label>Posting times</Label>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {postingTimes.map((time, i) => (
+                  <Badge key={i} variant="outline">
+                    {time}
+                    <button
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                      onClick={() => setPostingTimes(postingTimes.filter((_, j) => j !== i))}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <Input type="time" value={newPostingTime} onChange={(e) => setNewPostingTime(e.target.value)} />
+                <Button
+                  variant="outline"
+                  disabled={!newPostingTime || postingTimes.includes(newPostingTime)}
+                  onClick={() => {
+                    setPostingTimes([...postingTimes, newPostingTime].sort());
+                    setNewPostingTime('');
+                  }}
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
           )}
 
           <div>
