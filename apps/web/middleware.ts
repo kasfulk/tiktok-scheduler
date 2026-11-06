@@ -18,13 +18,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (hasSession && (pathname === '/login' || pathname === '/register')) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    url.search = '';
-    return NextResponse.redirect(url);
-  }
-
+  // No "cookie present => already logged in" redirect here. A cookie whose Session row is gone
+  // (expired, re-seeded DB) is indistinguishable from a real one at the Edge, so bouncing /login
+  // to /dashboard looped forever against the dashboard layout's DB check. The (auth) layout does
+  // that redirect properly, with the database in reach.
   return NextResponse.next();
 }
 
