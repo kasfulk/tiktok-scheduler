@@ -13,7 +13,7 @@ import { generateSchedule, type ScheduleSlot } from '@tiktok-scheduler/scheduler
 import { cancelPublishJob, schedulePublishJob } from '@tiktok-scheduler/queue';
 import { prisma } from './client';
 import { computeMassRescheduleInstant, type MassRescheduleMode } from './mass-schedule';
-import { countDayCapacity, lastPostInstant, loadOccupancy } from './occupancy';
+import { countDayCapacity, loadOccupancy } from './occupancy';
 import { getEffectivePolicy } from './settings';
 
 export class SchedulingError extends Error {
@@ -264,31 +264,6 @@ export async function rescheduleScheduledPost(params: {
     }
     if (policy.globalDailyLimit !== null && globalCount + 1 > policy.globalDailyLimit) {
       throw new SchedulingError('GLOBAL_LIMIT_REACHED', `${localDate} already has ${globalCount} posts across accounts`);
-    }
-  }
-
-  if (policy.minimumIntervalMinutes > 0) {
-    const neighbours = await prisma.scheduledPost.findMany({
-      where: {
-        accountId,
-        id: { not: post.id },
-        status: { in: ['PENDING', 'QUEUED', 'PUBLISHING', 'PUBLISHED', 'MANUAL_ACTION_REQUIRED'] },
-        scheduledAt: {
-          gte: new Date(params.scheduledAt.getTime() - policy.minimumIntervalMinutes * 60_000),
-          lte: new Date(params.scheduledAt.getTime() + policy.minimumIntervalMinutes * 60_000),
-        },
-      },
-      select: { scheduledAt: true },
-    });
-    const tooClose = neighbours.find(
-      (neighbour) =>
-        Math.abs(neighbour.scheduledAt.getTime() - params.scheduledAt.getTime()) < policy.minimumIntervalMinutes * 60_000,
-    );
-    if (tooClose) {
-      throw new SchedulingError('INTERVAL_VIOLATION', 'Another post on this account is too close', {
-        conflictingAt: tooClose.scheduledAt.toISOString(),
-        minimumIntervalMinutes: policy.minimumIntervalMinutes,
-      });
     }
   }
 
@@ -582,4 +557,4 @@ export function describeSlot(instant: Date, timezone: string): string {
   return `${formatLocalDate(instant, timezone)} ${formatLocalTime(instant, timezone)} (${timezone})`;
 }
 
-export { localDateTimeToUtc, lastPostInstant };
+export { localDateTimeToUtc };

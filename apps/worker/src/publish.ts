@@ -4,7 +4,6 @@ import {
   countDayCapacity,
 
   getEffectivePolicy,
-  lastPostInstant,
   prisma,
   SchedulingError,
 } from '@tiktok-scheduler/db';
@@ -318,7 +317,7 @@ async function loadPost(postId: string): Promise<LoadedPost | null> {
   });
 }
 
-/** Daily-limit + minimum-interval + video-readiness checks against live data. */
+/** Daily-limit + video-readiness checks against live data. */
 async function checkGates(ctx: PublishContext): Promise<PublishOutcome | null> {
   const { post } = ctx;
   if (post.video.status !== 'READY' && post.video.status !== 'SCHEDULED') {
@@ -352,19 +351,6 @@ async function checkGates(ctx: PublishContext): Promise<PublishOutcome | null> {
       `All accounts already have ${globalCount} posts on ${localDate} (limit ${policy.globalDailyLimit})`,
       { terminal: true, notification: { type: 'DAILY_LIMIT_REACHED', title: 'Global daily limit reached' } },
     );
-  }
-  if (policy.minimumIntervalMinutes > 0) {
-    const previous = await lastPostInstant({
-      accountId: post.accountId,
-      before: post.scheduledAt,
-      excludePostIds: [post.id],
-    });
-    if (previous && post.scheduledAt.getTime() - previous.getTime() < policy.minimumIntervalMinutes * 60_000) {
-      return failOrRetry(ctx, 'INTERVAL_VIOLATION', 'Another post on this account is too close in time', {
-        terminal: true,
-        notification: { type: 'PUBLISH_FAILED', title: 'Publish skipped: interval violation' },
-      });
-    }
   }
   return null;
 }

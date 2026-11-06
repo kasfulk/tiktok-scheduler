@@ -371,9 +371,10 @@ function PostingTab() {
               <Input
                 id="minimumIntervalMinutes"
                 type="number"
-                min={1}
+                min={0}
                 {...register('minimumIntervalMinutes', { valueAsNumber: true })}
               />
+              <p className="text-[11px] text-muted-foreground">0 = no minimum gap.</p>
               <FieldError>{errors.minimumIntervalMinutes?.message}</FieldError>
             </div>
           </div>
@@ -474,7 +475,8 @@ function PostingTab() {
 
 function buildSummary(values: PostingSettingsDto): string {
   const limit = values.enableDailyLimit ? `Up to ${values.dailyPostingLimit} posts/day` : 'No daily limit';
-  const interval = `at least ${values.minimumIntervalMinutes} min apart`;
+  const interval =
+    values.minimumIntervalMinutes > 0 ? `at least ${values.minimumIntervalMinutes} min apart` : 'no minimum interval';
   const hours = `${values.activeHoursStart}–${values.activeHoursEnd}`;
   const tz = values.timezone.replaceAll('_', ' ');
   return `${limit}, ${interval}, ${hours} in ${tz}.`;

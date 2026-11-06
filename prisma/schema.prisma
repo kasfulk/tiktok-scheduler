@@ -179,7 +179,7 @@ model PostingSettings {
   userId                 String   @unique
   enableDailyLimit       Boolean  @default(true)
   dailyPostingLimit      Int      @default(5)
-  minimumIntervalMinutes Int      @default(120)
+  minimumIntervalMinutes Int      @default(0)
   activeHoursStart       String   @default("08:00")
   activeHoursEnd         String   @default("22:00")
   activeDays             String   @default("1,2,3,4,5,6,0")
@@ -197,7 +197,7 @@ model AccountPostingSettings {
   accountId              String   @unique
   enabled                Boolean  @default(true)
   dailyPostingLimit      Int      @default(3)
-  minimumIntervalMinutes Int      @default(120)
+  minimumIntervalMinutes Int      @default(0)
   activeHoursStart       String   @default("08:00")
   activeHoursEnd         String   @default("22:00")
   activeDays             String   @default("1,2,3,4,5,6,0")

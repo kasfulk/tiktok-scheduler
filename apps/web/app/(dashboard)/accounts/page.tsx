@@ -362,9 +362,10 @@ function AccountLimitsDialog({ account, onClose }: { account: AccountDto; onClos
                   <Input
                     id="account-interval"
                     type="number"
-                    min={1}
+                    min={0}
                     {...register('minimumIntervalMinutes', { valueAsNumber: true })}
                   />
+                  <p className="text-[11px] text-muted-foreground">0 = no minimum gap.</p>
                 </div>
               </div>
 
