@@ -18,6 +18,7 @@ import { Tabs } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { buildGenerateScheduleBody } from '@/lib/schedule-payload';
+import { calendarDateKey } from '@/lib/calendar-date';
 import { formatLocalDate, formatLocalTime, localDateTimeToUtc, WEEKDAY_LABELS } from '@tiktok-scheduler/shared';
 
 type ViewMode = 'month' | 'week' | 'day' | 'list';
@@ -125,7 +126,7 @@ function CalendarPageContent() {
 
   const handleDrop = (date: Date, post: ScheduledPostDto) => {
     const originalTime = formatLocalTime(post.scheduledAt, post.timezone);
-    const newDate = formatLocalDate(date, post.timezone);
+    const newDate = calendarDateKey(date);
     const newScheduledAt = localDateTimeToUtc(newDate, originalTime, post.timezone).toISOString();
 
     queryClient.setQueryData(['schedules', 'calendar', dateRange.from, dateRange.to], (old: PaginatedResponse<ScheduledPostDto> | undefined) => {
@@ -400,10 +401,10 @@ function MonthView({
       </div>
       <div className="grid grid-cols-7">
         {days.map((day, i) => {
-          const dateStr = formatLocalDate(day, 'UTC');
+          const dateStr = calendarDateKey(day);
           const dayPosts = postsByDate.get(dateStr) ?? [];
           const isCurrentMonth = day.getMonth() === month;
-          const isToday = formatLocalDate(new Date(), 'UTC') === dateStr;
+          const isToday = calendarDateKey(new Date()) === dateStr;
 
           return (
             <div
@@ -525,9 +526,9 @@ function WeekView({
   return (
     <div className="grid grid-cols-7">
       {days.map((day, i) => {
-        const dateStr = formatLocalDate(day, 'UTC');
+        const dateStr = calendarDateKey(day);
         const dayPosts = postsByDate.get(dateStr) ?? [];
-        const isToday = formatLocalDate(new Date(), 'UTC') === dateStr;
+        const isToday = calendarDateKey(new Date()) === dateStr;
 
         return (
           <div
@@ -577,7 +578,7 @@ function DayView({
   onDrop: (date: Date, post: ScheduledPostDto) => void;
   onDragStart: (post: ScheduledPostDto | null) => void;
 }) {
-  const dateStr = formatLocalDate(currentDate, 'UTC');
+  const dateStr = calendarDateKey(currentDate);
   const dayPosts = posts.filter((p) => p.localDate === dateStr).sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
 
   return (
@@ -713,12 +714,9 @@ function PostDialog({
   onSaved: () => void;
 }) {
   const [tab, setTab] = useState<'details' | 'reschedule' | 'account' | 'caption'>('details');
-  const [dateTime, setDateTime] = useState(() => {
-    const date = new Date(post.scheduledAt);
-    const offset = date.getTimezoneOffset();
-    const local = new Date(date.getTime() - offset * 60_000);
-    return local.toISOString().slice(0, 16);
-  });
+  const [dateTime, setDateTime] = useState(
+    () => `${formatLocalDate(post.scheduledAt, post.timezone)}T${formatLocalTime(post.scheduledAt, post.timezone)}`,
+  );
   const [accountId, setAccountId] = useState(post.accountId);
   const [caption, setCaption] = useState(post.video.caption ?? '');
   const [pending, setPending] = useState(false);
@@ -730,7 +728,8 @@ function PostDialog({
     setPending(true);
     setError(null);
     try {
-      const scheduledAt = new Date(dateTime).toISOString();
+      const [datePart, timePart = '00:00'] = dateTime.split('T');
+      const scheduledAt = localDateTimeToUtc(datePart!, timePart, post.timezone).toISOString();
       await apiFetch(`/api/schedules/${post.id}`, { method: 'PATCH', json: { scheduledAt } });
       toast.success('Post rescheduled');
       onSaved();
@@ -817,7 +816,10 @@ function PostDialog({
         </div>
 
         <div className="mb-4 space-y-1 text-xs">
-          <div>Scheduled: {new Date(post.scheduledAt).toLocaleString()}</div>
+          <div>
+            Scheduled: {formatLocalDate(post.scheduledAt, post.timezone)} {formatLocalTime(post.scheduledAt, post.timezone)}{' '}
+            ({post.timezone})
+          </div>
           <div>Retries: {post.retryCount}/{post.maxRetries}</div>
           {post.errorMessage && <div className="text-error">Error: {post.errorMessage}</div>}
           {post.externalPublishId && <div>External ID: {post.externalPublishId}</div>}
