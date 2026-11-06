@@ -113,14 +113,12 @@ erDiagram
                   string externalPublishId
                   int retryCount }
   ScheduleBatch { string id PK
-                  string schedulingMode
-                  int dailyPostingLimit }
+                  string schedulingMode }
   PostingSettings { string id PK
-                    int dailyPostingLimit
                     int minimumIntervalMinutes
                     string activeDays }
   AccountPostingSettings { string id PK
-                           int dailyPostingLimit }
+                           boolean enabled }
   PublishingLog { string id PK
                   string event }
   Notification { string id PK

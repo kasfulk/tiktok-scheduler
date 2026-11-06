@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   CONNECTION_STATUSES,
-  LIMIT_SCOPES,
   PRIVACY_LEVELS,
   PUBLISH_METHODS,
   SCHEDULING_MODES,
@@ -87,7 +86,6 @@ export const generateScheduleSchema = z
     startTime: localTime.optional(),
     intervalMinutes: z.number().int().min(5).max(1440).optional(),
     postingTimes: z.array(localTime).min(1).max(48).optional(),
-    dailyPostingLimit: z.number().int().min(1).max(100),
     activeDays,
     activeHoursStart: localTime.default('08:00'),
     activeHoursEnd: localTime.default('22:00'),
@@ -157,14 +155,11 @@ export const listSchedulesQuerySchema = z.object({
 
 export const postingSettingsSchema = z
   .object({
-    enableDailyLimit: z.boolean(),
-    dailyPostingLimit: z.number().int().min(1).max(100),
     minimumIntervalMinutes: z.number().int().min(0).max(1440),
     activeHoursStart: localTime,
     activeHoursEnd: localTime,
     activeDays,
     timezone: timeZone,
-    limitScope: z.enum(LIMIT_SCOPES),
     defaultSchedulingMode: z.enum(SCHEDULING_MODES).optional(),
   })
   .superRefine((value, ctx) => {
@@ -180,7 +175,6 @@ export const postingSettingsSchema = z
 export const accountPostingSettingsSchema = z
   .object({
     enabled: z.boolean(),
-    dailyPostingLimit: z.number().int().min(1).max(100),
     minimumIntervalMinutes: z.number().int().min(0).max(1440),
     activeHoursStart: localTime,
     activeHoursEnd: localTime,

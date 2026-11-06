@@ -13,7 +13,7 @@ import { generateSchedule, type ScheduleSlot } from '@tiktok-scheduler/scheduler
 import { cancelPublishJob, schedulePublishJob } from '@tiktok-scheduler/queue';
 import { prisma } from './client';
 import { computeMassRescheduleInstant, type MassRescheduleMode } from './mass-schedule';
-import { countDayCapacity, loadOccupancy } from './occupancy';
+import { loadOccupancy } from './occupancy';
 import { getEffectivePolicy } from './settings';
 
 export class SchedulingError extends Error {
@@ -39,7 +39,6 @@ export interface ScheduleRequest {
   intervalMinutes?: number;
   postingTimes?: string[];
   customSlots?: { date: string; time: string }[];
-  dailyPostingLimit: number;
   activeDays: number[];
   activeHours: { start: string; end: string };
   timezone: string;
@@ -89,9 +88,6 @@ export async function createScheduleBatch(input: ScheduleRequest): Promise<Creat
   }
 
   const policy = await getEffectivePolicy(input.userId, input.accountId);
-  const dailyPostingLimit = policy.enableDailyLimit
-    ? Math.min(input.dailyPostingLimit, policy.dailyPostingLimit)
-    : input.dailyPostingLimit;
 
   const occupancy = await loadOccupancy({
     userId: input.userId,
@@ -112,12 +108,9 @@ export async function createScheduleBatch(input: ScheduleRequest): Promise<Creat
     ...(input.customSlots ? { customSlots: input.customSlots } : {}),
     constraints: {
       timezone: input.timezone,
-      dailyPostingLimit,
       minimumIntervalMinutes: policy.minimumIntervalMinutes,
       activeHours: input.activeHours,
       activeDays: input.activeDays,
-      perAccountDailyLimit: policy.perAccountDailyLimit ?? null,
-      globalDailyLimit: policy.globalDailyLimit ?? null,
     },
     occupancy,
     now,
@@ -142,7 +135,6 @@ export async function createScheduleBatch(input: ScheduleRequest): Promise<Creat
         intervalMinutes: input.intervalMinutes ?? null,
         postingTimes: input.postingTimes ? JSON.stringify(input.postingTimes) : null,
         timezone: input.timezone,
-        dailyPostingLimit,
         status: 'COMPLETED',
         scheduledCount: generated.slots.length,
       },
@@ -203,7 +195,7 @@ export async function createScheduleBatch(input: ScheduleRequest): Promise<Creat
 
 /**
  * Move one post. Refuses PUBLISHED / PUBLISHING / MANUAL_ACTION_REQUIRED rows: their outcome is
- * decided by TikTok, not by the calendar. Capacity and interval are re-checked on the target day.
+ * decided by TikTok, not by the calendar.
  */
 export async function rescheduleScheduledPost(params: {
   userId: string;
@@ -240,32 +232,6 @@ export async function rescheduleScheduledPost(params: {
 
   const policy = await getEffectivePolicy(params.userId, accountId);
   const timezone = policy.timezone || post.timezone || 'UTC';
-  const localDate = formatLocalDate(params.scheduledAt, timezone);
-
-  if (policy.enableDailyLimit) {
-    const counts = await countDayCapacity({
-      userId: params.userId,
-      accountId,
-      localDate,
-      timezone,
-    });
-    const ownRow = await prisma.scheduledPost.count({
-      where: {
-        id: post.id,
-        status: { in: ['PENDING', 'QUEUED', 'PUBLISHING', 'PUBLISHED', 'MANUAL_ACTION_REQUIRED'] },
-        scheduledAt: { gte: startOfLocalDayUtc(localDate, timezone) },
-      },
-    });
-    const accountCount = counts.account - ownRow;
-    const globalCount = counts.global - ownRow;
-
-    if (accountCount + 1 > policy.dailyPostingLimit) {
-      throw new SchedulingError('DAILY_LIMIT_REACHED', `${localDate} already has ${accountCount} posts for this account`);
-    }
-    if (policy.globalDailyLimit !== null && globalCount + 1 > policy.globalDailyLimit) {
-      throw new SchedulingError('GLOBAL_LIMIT_REACHED', `${localDate} already has ${globalCount} posts across accounts`);
-    }
-  }
 
   await prisma.scheduledPost.update({
     where: { id: post.id },
@@ -482,12 +448,9 @@ export async function replanUserPendingPosts(
       intervalMinutes: Math.max(5, policy.minimumIntervalMinutes || 60),
       constraints: {
         timezone,
-        dailyPostingLimit: policy.dailyPostingLimit,
         minimumIntervalMinutes: policy.minimumIntervalMinutes,
         activeHours: policy.activeHours,
         activeDays: policy.activeDays,
-        perAccountDailyLimit: policy.perAccountDailyLimit ?? null,
-        globalDailyLimit: policy.globalDailyLimit ?? null,
       },
       occupancy,
       now,

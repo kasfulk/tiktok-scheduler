@@ -141,28 +141,22 @@ export function postToDto(post: ScheduledPostRow, fallbackTimezone: string): Sch
 }
 
 export interface PostingSettingsRow {
-  enableDailyLimit: boolean;
-  dailyPostingLimit: number;
   minimumIntervalMinutes: number;
   activeHoursStart: string;
   activeHoursEnd: string;
   activeDays: string;
   timezone: string;
-  limitScope: string;
   defaultSchedulingMode: string;
   updatedAt: Date;
 }
 
 export function postingSettingsToDto(settings: PostingSettingsRow): PostingSettingsDto {
   return {
-    enableDailyLimit: settings.enableDailyLimit,
-    dailyPostingLimit: settings.dailyPostingLimit,
     minimumIntervalMinutes: settings.minimumIntervalMinutes,
     activeHoursStart: settings.activeHoursStart,
     activeHoursEnd: settings.activeHoursEnd,
     activeDays: parseActiveDays(settings.activeDays),
     timezone: settings.timezone,
-    limitScope: settings.limitScope as PostingSettingsDto['limitScope'],
     defaultSchedulingMode: settings.defaultSchedulingMode as PostingSettingsDto['defaultSchedulingMode'],
     updatedAt: settings.updatedAt.toISOString(),
   };
@@ -171,7 +165,6 @@ export function postingSettingsToDto(settings: PostingSettingsRow): PostingSetti
 export function accountPostingSettingsToDto(settings: {
   accountId: string;
   enabled: boolean;
-  dailyPostingLimit: number;
   minimumIntervalMinutes: number;
   activeHoursStart: string;
   activeHoursEnd: string;
@@ -181,7 +174,6 @@ export function accountPostingSettingsToDto(settings: {
   return {
     accountId: settings.accountId,
     enabled: settings.enabled,
-    dailyPostingLimit: settings.dailyPostingLimit,
     minimumIntervalMinutes: settings.minimumIntervalMinutes,
     activeHoursStart: settings.activeHoursStart,
     activeHoursEnd: settings.activeHoursEnd,

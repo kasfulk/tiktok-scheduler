@@ -20,6 +20,7 @@ import type {
 
 const MAX_SCAN_DAYS = 1460;
 
+/** How many slots fit in one day given the active-hours span and the slot interval. */
 export function computeDailyCapacity(
   constraints: ScheduleConstraints,
   intervalMinutes: number,
@@ -28,16 +29,7 @@ export function computeDailyCapacity(
   const endMin = timeToMinutes(constraints.activeHours.end);
   const span = endMin - startMin;
   if (span <= 0) return 0;
-  const steps = Math.max(1, Math.floor(span / intervalMinutes));
-  let cap = steps;
-  if (constraints.dailyPostingLimit > 0) cap = Math.min(cap, constraints.dailyPostingLimit);
-  if (constraints.perAccountDailyLimit != null && constraints.perAccountDailyLimit > 0) {
-    cap = Math.min(cap, constraints.perAccountDailyLimit);
-  }
-  if (constraints.globalDailyLimit != null && constraints.globalDailyLimit > 0) {
-    cap = Math.min(cap, constraints.globalDailyLimit);
-  }
-  return cap;
+  return Math.max(1, Math.floor(span / intervalMinutes));
 }
 
 function validateInput(input: GenerateScheduleInput): void {
@@ -132,28 +124,6 @@ function nextActiveDay(localDate: string, activeDays: number[]): string {
   return candidate;
 }
 
-function effectiveDayCapacity(
-  localDate: string,
-  baseCapacity: number,
-  constraints: ScheduleConstraints,
-  occupancy: ExistingOccupancy | undefined,
-  placedToday: number,
-): number {
-  let cap = baseCapacity;
-
-  if (constraints.perAccountDailyLimit != null && constraints.perAccountDailyLimit > 0) {
-    const accountUsed = occupancy?.perAccountDayCounts?.[localDate] ?? 0;
-    cap = Math.min(cap, constraints.perAccountDailyLimit - accountUsed);
-  }
-  if (constraints.globalDailyLimit != null && constraints.globalDailyLimit > 0) {
-    const globalUsed = occupancy?.globalDayCounts?.[localDate] ?? 0;
-    cap = Math.min(cap, constraints.globalDailyLimit - globalUsed);
-  }
-
-  cap -= placedToday;
-  return Math.max(0, cap);
-}
-
 function generateIntervalSlots(
   input: GenerateScheduleInput,
   baseCapacityFn: () => number,
@@ -185,7 +155,7 @@ function generateIntervalSlots(
     }
 
     const placedToday = placedPerDay.get(currentDay) ?? 0;
-    const dayCap = effectiveDayCapacity(currentDay, baseCapacityFn(), constraints, occupancy, placedToday);
+    const dayCap = baseCapacityFn() - placedToday;
     if (dayCap <= 0) {
       currentDay = nextActiveDay(currentDay, constraints.activeDays);
       scanDays++;
@@ -243,7 +213,7 @@ function generateFixedTimeSlots(input: GenerateScheduleInput): { slots: Schedule
   const nowMs = toDate(now).getTime();
 
   const sortedTimes = [...postingTimes!].sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
-  const maxPerDay = Math.min(constraints.dailyPostingLimit, sortedTimes.length);
+  const maxPerDay = sortedTimes.length;
 
   const slots: ScheduleSlot[] = [];
   const warnings: string[] = [];
@@ -264,7 +234,7 @@ function generateFixedTimeSlots(input: GenerateScheduleInput): { slots: Schedule
     }
 
     const placedToday = placedPerDay.get(currentDay) ?? 0;
-    const dayCap = effectiveDayCapacity(currentDay, maxPerDay, constraints, occupancy, placedToday);
+    const dayCap = maxPerDay - placedToday;
     if (dayCap <= 0) {
       currentDay = nextActiveDay(currentDay, constraints.activeDays);
       scanDays++;
@@ -310,7 +280,6 @@ function generateCustomSlots(input: GenerateScheduleInput): { slots: ScheduleSlo
   const slots: ScheduleSlot[] = [];
   const warnings: string[] = [];
   let unscheduled = 0;
-  const placedPerDay = new Map<string, number>();
 
   let lastSlotMs: number | null = null;
   if (occupancy?.lastScheduledAt) {
@@ -335,14 +304,6 @@ function generateCustomSlots(input: GenerateScheduleInput): { slots: ScheduleSlo
       continue;
     }
 
-    const placedToday = placedPerDay.get(date) ?? 0;
-    const dayCap = effectiveDayCapacity(date, constraints.dailyPostingLimit, constraints, occupancy, placedToday);
-    if (dayCap <= 0) {
-      unscheduled++;
-      warnings.push(`Slot on ${date} dropped: daily limit reached`);
-      continue;
-    }
-
     const slot = makeSlot(date, time, tz);
     const slotMs = new Date(slot.scheduledAt).getTime();
 
@@ -360,7 +321,6 @@ function generateCustomSlots(input: GenerateScheduleInput): { slots: ScheduleSlo
 
     slots.push(slot);
     lastSlotMs = slotMs;
-    placedPerDay.set(date, placedToday + 1);
   }
 
   return { slots, unscheduled, warnings };
@@ -381,13 +341,12 @@ export function generateSchedule(input: GenerateScheduleInput): GeneratedSchedul
   }
 
   if (mode === 'INTERVAL') {
-    const result = generateIntervalSlots(input, () => constraints.dailyPostingLimit);
+    const result = generateIntervalSlots(input, () => computeDailyCapacity(constraints, input.intervalMinutes!));
     return { slots: result.slots, unscheduled: 0, warnings: result.warnings };
   }
 
   if (mode === 'SMART') {
-    const baseCap = computeDailyCapacity(constraints, input.intervalMinutes!);
-    const result = generateIntervalSlots(input, () => baseCap);
+    const result = generateIntervalSlots(input, () => computeDailyCapacity(constraints, input.intervalMinutes!));
     return { slots: result.slots, unscheduled: 0, warnings: result.warnings };
   }
 

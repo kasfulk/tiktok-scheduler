@@ -15,7 +15,7 @@ import type { ActivityPoint, DashboardStats, UpcomingPost } from '@tiktok-schedu
 import { apiFetch, queryKeys } from '@/lib/api-client';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress, Skeleton } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/progress';
 import { StatusBadge } from '@/components/ui/badge';
 import { EmptyState, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -64,8 +64,6 @@ export default function DashboardPage() {
   const data = stats.data;
   const loading = stats.isPending;
   const publishedToday = data?.todayPublished ?? 0;
-  const dailyLimit = data?.dailyLimit ?? 0;
-  const remaining = data?.remainingDailySlots ?? 0;
 
   return (
     <div className="space-y-5">
@@ -106,12 +104,8 @@ export default function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-start justify-between">
             <div>
-              <CardTitle>Daily posting progress</CardTitle>
-              <CardDescription>
-                {data?.dailyLimitEnabled === false
-                  ? 'Daily limit is disabled in Settings → Posting Schedule.'
-                  : `Internal cap of ${dailyLimit} post${dailyLimit === 1 ? '' : 's'} per day; TikTok applies its own limits on top.`}
-              </CardDescription>
+              <CardTitle>Published today</CardTitle>
+              <CardDescription>Posts that went live today in {data?.timezone ?? 'your timezone'}.</CardDescription>
             </div>
             <Link href="/settings?tab=posting" className="text-[11px] text-muted-foreground underline-offset-4 hover:underline">
               Configure
@@ -120,16 +114,10 @@ export default function DashboardPage() {
           <CardContent className="space-y-3">
             <div className="flex items-baseline gap-2">
               <span className="tabular text-3xl font-semibold">{publishedToday}</span>
-              <span className="tabular text-sm text-muted-foreground">/ {dailyLimit}</span>
               <span className="ml-auto text-xs text-muted-foreground">
-                {remaining} slot{remaining === 1 ? '' : 's'} left today
+                {data?.scheduled ?? 0} post{(data?.scheduled ?? 0) === 1 ? '' : 's'} scheduled ahead
               </span>
             </div>
-            <Progress
-              value={publishedToday}
-              max={Math.max(dailyLimit, 1)}
-              indicatorClassName={publishedToday >= dailyLimit ? 'bg-warning' : undefined}
-            />
           </CardContent>
         </Card>
 

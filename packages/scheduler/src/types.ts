@@ -9,17 +9,12 @@ export interface ScheduleSlot {
 
 export interface ScheduleConstraints {
   timezone: string;
-  dailyPostingLimit: number;
   minimumIntervalMinutes: number;
   activeHours: { start: string; end: string };
   activeDays: number[];
-  perAccountDailyLimit?: number | null;
-  globalDailyLimit?: number | null;
 }
 
 export interface ExistingOccupancy {
-  perAccountDayCounts?: Record<string, number>;
-  globalDayCounts?: Record<string, number>;
   lastScheduledAt?: string | null;
 }
 

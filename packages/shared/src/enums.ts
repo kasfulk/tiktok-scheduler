@@ -41,9 +41,6 @@ export type SchedulingMode = (typeof SCHEDULING_MODES)[number];
 export const CONNECTION_STATUSES = ['CONNECTED', 'EXPIRED', 'DISCONNECTED'] as const;
 export type ConnectionStatus = (typeof CONNECTION_STATUSES)[number];
 
-export const LIMIT_SCOPES = ['GLOBAL', 'PER_ACCOUNT'] as const;
-export type LimitScope = (typeof LIMIT_SCOPES)[number];
-
 export const PUBLISH_METHODS = ['DIRECT_POST', 'UPLOAD_DRAFT'] as const;
 export type PublishMethod = (typeof PUBLISH_METHODS)[number];
 
@@ -53,7 +50,6 @@ export const NOTIFICATION_TYPES = [
   'TOKEN_EXPIRED',
   'ACCOUNT_DISCONNECTED',
   'MANUAL_ACTION_REQUIRED',
-  'DAILY_LIMIT_REACHED',
   'SCHEDULE_CHANGED',
   'QUEUE_COMPLETED',
 ] as const;

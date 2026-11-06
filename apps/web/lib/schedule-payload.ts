@@ -10,7 +10,6 @@ export interface GenerateScheduleForm {
   startTime: string;
   intervalMinutes: number;
   postingTimes: string[];
-  dailyPostingLimit: number;
   activeDays: number[];
   activeHoursStart: string;
   activeHoursEnd: string;
@@ -26,7 +25,6 @@ export interface GenerateScheduleBody {
   startTime?: string;
   intervalMinutes?: number;
   postingTimes?: string[];
-  dailyPostingLimit: number;
   activeDays: number[];
   activeHoursStart: string;
   activeHoursEnd: string;
@@ -74,7 +72,6 @@ export function buildGenerateScheduleBody(form: GenerateScheduleForm): BuildGene
       startDate: form.startDate,
       ...(anchoredByStartTime ? { startTime: form.startTime, intervalMinutes: form.intervalMinutes } : {}),
       ...(form.mode === 'FIXED_TIME' ? { postingTimes: form.postingTimes } : {}),
-      dailyPostingLimit: form.dailyPostingLimit,
       activeDays: form.activeDays,
       activeHoursStart: form.activeHoursStart,
       activeHoursEnd: form.activeHoursEnd,

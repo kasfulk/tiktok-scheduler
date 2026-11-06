@@ -18,14 +18,11 @@ export const PATCH = route(async ({ request, user }) => {
   const settings = await prisma.postingSettings.update({
     where: { userId: user.id },
     data: {
-      enableDailyLimit: input.enableDailyLimit,
-      dailyPostingLimit: input.dailyPostingLimit,
       minimumIntervalMinutes: input.minimumIntervalMinutes,
       activeHoursStart: input.activeHoursStart,
       activeHoursEnd: input.activeHoursEnd,
       activeDays: serializeActiveDays(input.activeDays),
       timezone: input.timezone,
-      limitScope: input.limitScope,
       ...(input.defaultSchedulingMode ? { defaultSchedulingMode: input.defaultSchedulingMode } : {}),
     },
   });

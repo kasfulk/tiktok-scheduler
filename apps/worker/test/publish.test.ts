@@ -102,21 +102,17 @@ describe.skipIf(!hasRedis)('publish pipeline (e2e)', () => {
     await db.prisma.postingSettings.update({
       where: { id: settings.id },
       data: {
-        enableDailyLimit: true,
-        dailyPostingLimit: 5,
         minimumIntervalMinutes: 0,
         activeHoursStart: '00:00',
         activeHoursEnd: '23:59',
         activeDays: '1,2,3,4,5,6,7',
         timezone: 'Asia/Makassar',
-        limitScope: 'PER_ACCOUNT',
       },
     });
     await db.prisma.accountPostingSettings.create({
       data: {
         accountId: account.id,
         enabled: true,
-        dailyPostingLimit: 5,
         minimumIntervalMinutes: 0,
         activeHoursStart: '00:00',
         activeHoursEnd: '23:59',

@@ -4,24 +4,20 @@ import type { ScheduleConstraints, GenerateScheduleInput } from '../src/index.js
 
 const baseConstraints: ScheduleConstraints = {
   timezone: 'UTC',
-  dailyPostingLimit: 10,
   minimumIntervalMinutes: 0,
   activeHours: { start: '08:00', end: '22:00' },
   activeDays: [0, 1, 2, 3, 4, 5, 6],
 };
 
 describe('INTERVAL mode', () => {
-  it('places 10 videos across 2 days with 5/day limit', () => {
+  it('places 10 videos across 2 days, filling the active hours first', () => {
     const input: GenerateScheduleInput = {
       mode: 'INTERVAL',
       count: 10,
       startDate: '2026-11-01',
       startTime: '08:00',
       intervalMinutes: 120,
-      constraints: {
-        ...baseConstraints,
-        dailyPostingLimit: 5,
-      },
+      constraints: baseConstraints,
       now: '2026-10-01T00:00:00Z',
     };
 
@@ -31,18 +27,15 @@ describe('INTERVAL mode', () => {
     expect(result.unscheduled).toBe(0);
     expect(result.warnings).toHaveLength(0);
 
-    // Day 1: 08:00, 10:00, 12:00, 14:00, 16:00
+    // Day 1: 08:00 … 20:00 — 7 slots fit in the 08:00–22:00 window at 2h apart
     expect(result.slots[0]!.localDate).toBe('2026-11-01');
     expect(result.slots[0]!.localTime).toBe('08:00');
-    expect(result.slots[1]!.localTime).toBe('10:00');
-    expect(result.slots[2]!.localTime).toBe('12:00');
-    expect(result.slots[3]!.localTime).toBe('14:00');
-    expect(result.slots[4]!.localTime).toBe('16:00');
+    expect(result.slots[6]!.localTime).toBe('20:00');
 
-    // Day 2: 08:00, 10:00, 12:00, 14:00, 16:00
-    expect(result.slots[5]!.localDate).toBe('2026-11-02');
-    expect(result.slots[5]!.localTime).toBe('08:00');
-    expect(result.slots[9]!.localTime).toBe('16:00');
+    // Day 2 continues at 08:00
+    expect(result.slots[7]!.localDate).toBe('2026-11-02');
+    expect(result.slots[7]!.localTime).toBe('08:00');
+    expect(result.slots[9]!.localTime).toBe('12:00');
   });
 
   it('respects minimumIntervalMinutes', () => {
@@ -69,16 +62,13 @@ describe('INTERVAL mode', () => {
 });
 
 describe('FIXED_TIME mode', () => {
-  it('places 20 videos with 3 times/day and limit 3', () => {
+  it('places 20 videos across 4 slots per day', () => {
     const input: GenerateScheduleInput = {
       mode: 'FIXED_TIME',
       count: 20,
       startDate: '2026-11-01',
       postingTimes: ['08:00', '12:00', '16:00', '20:00'],
-      constraints: {
-        ...baseConstraints,
-        dailyPostingLimit: 3,
-      },
+      constraints: baseConstraints,
       now: '2026-10-01T00:00:00Z',
     };
 
@@ -87,12 +77,11 @@ describe('FIXED_TIME mode', () => {
     expect(result.slots).toHaveLength(20);
     expect(result.unscheduled).toBe(0);
 
-    // 3 per day, 7 days = 21 slots available, but we only need 20
+    // Every posting time is used: 4 per day, 5 days for 20 videos
     const day1Slots = result.slots.filter(s => s.localDate === '2026-11-01');
-    expect(day1Slots).toHaveLength(3);
-    expect(day1Slots[0]!.localTime).toBe('08:00');
-    expect(day1Slots[1]!.localTime).toBe('12:00');
-    expect(day1Slots[2]!.localTime).toBe('16:00');
+    expect(day1Slots).toHaveLength(4);
+    expect(day1Slots[3]!.localTime).toBe('20:00');
+    expect(new Set(result.slots.map(s => s.localDate)).size).toBe(5);
   });
 });
 
@@ -104,10 +93,7 @@ describe('SMART mode', () => {
       startDate: '2026-11-01',
       startTime: '08:00',
       intervalMinutes: 120,
-      constraints: {
-        ...baseConstraints,
-        dailyPostingLimit: 5,
-      },
+      constraints: baseConstraints,
       now: '2026-10-01T00:00:00Z',
     };
 
@@ -116,13 +102,13 @@ describe('SMART mode', () => {
     expect(result.slots).toHaveLength(100);
     expect(result.unscheduled).toBe(0);
 
-    // computeDailyCapacity: floor((22-8)*60/120) = 7, clamped by dailyPostingLimit=5 => 5
+    // computeDailyCapacity: floor((22-8)*60/120) = 7 slots per day
     const capacity = computeDailyCapacity(input.constraints, 120);
-    expect(capacity).toBe(5);
+    expect(capacity).toBe(7);
 
-    // 100 / 5 = 20 days
+    // ceil(100 / 7) = 15 days
     const uniqueDays = new Set(result.slots.map(s => s.localDate));
-    expect(uniqueDays.size).toBe(20);
+    expect(uniqueDays.size).toBe(15);
   });
 });
 
@@ -153,35 +139,6 @@ describe('CUSTOM mode', () => {
 });
 
 describe('Occupancy', () => {
-  it('reduces capacity based on existing occupancy', () => {
-    const input: GenerateScheduleInput = {
-      mode: 'INTERVAL',
-      count: 5,
-      startDate: '2026-11-01',
-      startTime: '08:00',
-      intervalMinutes: 120,
-      constraints: {
-        ...baseConstraints,
-        dailyPostingLimit: 5,
-        perAccountDailyLimit: 3,
-      },
-      occupancy: {
-        perAccountDayCounts: { '2026-11-01': 2 },
-      },
-      now: '2026-10-01T00:00:00Z',
-    };
-
-    const result = generateSchedule(input);
-
-    // Day 1: capacity = 3 - 2 = 1 slot
-    // Day 2: capacity = 3 slots
-    expect(result.slots).toHaveLength(5);
-    const day1Slots = result.slots.filter(s => s.localDate === '2026-11-01');
-    expect(day1Slots).toHaveLength(1);
-    const day2Slots = result.slots.filter(s => s.localDate === '2026-11-02');
-    expect(day2Slots).toHaveLength(3);
-  });
-
   it('enforces lastScheduledAt minimum interval', () => {
     const input: GenerateScheduleInput = {
       mode: 'INTERVAL',
@@ -282,7 +239,6 @@ describe('Capacity exhaustion', () => {
       intervalMinutes: 1440, // 1 per day
       constraints: {
         ...baseConstraints,
-        dailyPostingLimit: 1,
         activeDays: [0], // Sunday only
       },
       now: '2026-10-01T00:00:00Z',
@@ -429,38 +385,5 @@ describe('Timezone correctness', () => {
     const diffHours = (utc1.getTime() - utc0.getTime()) / (1000 * 60 * 60);
     // 1 day = 24 hours, but DST spring-forward removes 1 hour = 23 hours
     expect(Math.abs(diffHours - 23)).toBeLessThan(0.1);
-  });
-});
-
-describe('Per-account vs global cap', () => {
-  it('respects both per-account and global limits', () => {
-    const input: GenerateScheduleInput = {
-      mode: 'INTERVAL',
-      count: 10,
-      startDate: '2026-11-01',
-      startTime: '08:00',
-      intervalMinutes: 120,
-      constraints: {
-        ...baseConstraints,
-        dailyPostingLimit: 10,
-        perAccountDailyLimit: 3,
-        globalDailyLimit: 4,
-      },
-      occupancy: {
-        perAccountDayCounts: { '2026-11-01': 1 },
-        globalDayCounts: { '2026-11-01': 2 },
-      },
-      now: '2026-10-01T00:00:00Z',
-    };
-
-    const result = generateSchedule(input);
-
-    // Day 1: perAccount cap = 3-1=2, global cap = 4-2=2, so min(10, 2, 2) = 2
-    const day1Slots = result.slots.filter(s => s.localDate === '2026-11-01');
-    expect(day1Slots).toHaveLength(2);
-
-    // Day 2: no occupancy, so perAccount cap = 3, global cap = 4, so min(10, 3, 4) = 3
-    const day2Slots = result.slots.filter(s => s.localDate === '2026-11-02');
-    expect(day2Slots).toHaveLength(3);
   });
 });

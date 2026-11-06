@@ -27,7 +27,6 @@ export const PATCH = route(async ({ request, user, params }) => {
     where: { accountId },
     data: {
       enabled: input.enabled,
-      dailyPostingLimit: input.dailyPostingLimit,
       minimumIntervalMinutes: input.minimumIntervalMinutes,
       activeHoursStart: input.activeHoursStart,
       activeHoursEnd: input.activeHoursEnd,

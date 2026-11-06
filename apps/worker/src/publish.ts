@@ -1,16 +1,13 @@
 import { stat } from 'node:fs/promises';
 import {
   armPublishJob,
-  countDayCapacity,
-
-  getEffectivePolicy,
   prisma,
   SchedulingError,
 } from '@tiktok-scheduler/db';
 import { absolutePathFor } from '@tiktok-scheduler/media';
 import { BrowserError, publishViaStudio } from '@tiktok-scheduler/browser';
 import { acquireLock, enqueueDeadLetter } from '@tiktok-scheduler/queue';
-import { TIKTOK_CAPTION_MAX_LENGTH, formatLocalDate, log, type NotificationType } from '@tiktok-scheduler/shared';
+import { TIKTOK_CAPTION_MAX_LENGTH, log, type NotificationType } from '@tiktok-scheduler/shared';
 import { TikTokApiError, type TikTokClient } from '@tiktok-scheduler/tiktok';
 import { backoffMs, createClient, demoMode, maxRetries, publishTimeoutMs, tiktokMode } from './config.js';
 import { notify } from './notifier.js';
@@ -317,40 +314,11 @@ async function loadPost(postId: string): Promise<LoadedPost | null> {
   });
 }
 
-/** Daily-limit + video-readiness checks against live data. */
+/** Video-readiness check against live data. */
 async function checkGates(ctx: PublishContext): Promise<PublishOutcome | null> {
   const { post } = ctx;
   if (post.video.status !== 'READY' && post.video.status !== 'SCHEDULED') {
     return failOrRetry(ctx, 'VIDEO_NOT_READY', `Video status is ${post.video.status}`, { terminal: false });
-  }
-
-  const policy = await getEffectivePolicy(post.account.userId, post.accountId);
-  const timezone = policy.timezone;
-  const localDate = formatLocalDate(post.scheduledAt, timezone);
-  const counts = await countDayCapacity({
-    userId: post.account.userId,
-    accountId: post.accountId,
-    localDate,
-    timezone,
-  });
-  const accountCount = Math.max(0, counts.account - 1);
-  const globalCount = Math.max(0, counts.global - 1);
-
-  if (policy.enableDailyLimit && accountCount >= policy.dailyPostingLimit) {
-    return failOrRetry(
-      ctx,
-      'DAILY_LIMIT_REACHED',
-      `Account already has ${accountCount} posts on ${localDate} (limit ${policy.dailyPostingLimit})`,
-      { terminal: true, notification: { type: 'DAILY_LIMIT_REACHED', title: 'Daily limit reached' } },
-    );
-  }
-  if (policy.globalDailyLimit !== null && globalCount >= policy.globalDailyLimit) {
-    return failOrRetry(
-      ctx,
-      'GLOBAL_LIMIT_REACHED',
-      `All accounts already have ${globalCount} posts on ${localDate} (limit ${policy.globalDailyLimit})`,
-      { terminal: true, notification: { type: 'DAILY_LIMIT_REACHED', title: 'Global daily limit reached' } },
-    );
   }
   return null;
 }

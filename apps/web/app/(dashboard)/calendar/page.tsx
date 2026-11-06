@@ -906,7 +906,6 @@ function GenerateScheduleDialog({
   const [intervalMinutes, setIntervalMinutes] = useState(60);
   const [postingTimes, setPostingTimes] = useState<string[]>(['09:00', '12:00', '18:00']);
   const [newPostingTime, setNewPostingTime] = useState('');
-  const [dailyLimit, setDailyLimit] = useState(postingSettings?.dailyPostingLimit ?? 5);
   const [activeDays, setActiveDays] = useState<number[]>(postingSettings?.activeDays ?? [1, 2, 3, 4, 5]);
   const [activeHoursStart, setActiveHoursStart] = useState(postingSettings?.activeHoursStart ?? '09:00');
   const [activeHoursEnd, setActiveHoursEnd] = useState(postingSettings?.activeHoursEnd ?? '22:00');
@@ -949,7 +948,6 @@ function GenerateScheduleDialog({
       startTime,
       intervalMinutes,
       postingTimes,
-      dailyPostingLimit: dailyLimit,
       activeDays,
       activeHoursStart,
       activeHoursEnd,
@@ -1090,11 +1088,6 @@ function GenerateScheduleDialog({
               </div>
             </div>
           )}
-
-          <div>
-            <Label>Daily limit</Label>
-            <Input type="number" value={dailyLimit} onChange={(e) => setDailyLimit(Number(e.target.value))} min={1} />
-          </div>
 
           <div>
             <Label>Active days</Label>

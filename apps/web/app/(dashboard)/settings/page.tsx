@@ -333,39 +333,7 @@ function PostingTab() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit((v) => mutation.mutate(v))} className="space-y-4" noValidate>
-          <div className="flex items-center justify-between rounded-lg border border-border p-3">
-            <div>
-              <Label htmlFor="enableDailyLimit" className="text-sm font-medium text-foreground">
-                Enable daily limit
-              </Label>
-              <p className="text-[11px] text-muted-foreground">Cap the number of posts per day.</p>
-            </div>
-            <Controller
-              name="enableDailyLimit"
-              control={control}
-              render={({ field }) => (
-                <Switch
-                  id="enableDailyLimit"
-                  label="Enable daily limit"
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              )}
-            />
-          </div>
-
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="dailyPostingLimit">Daily limit</Label>
-              <Input
-                id="dailyPostingLimit"
-                type="number"
-                min={1}
-                max={100}
-                {...register('dailyPostingLimit', { valueAsNumber: true })}
-              />
-              <FieldError>{errors.dailyPostingLimit?.message}</FieldError>
-            </div>
             <div className="space-y-1.5">
               <Label htmlFor="minimumIntervalMinutes">Minimum interval (min)</Label>
               <Input
@@ -431,23 +399,6 @@ function PostingTab() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Limit scope</Label>
-            <div className="flex gap-3">
-              {(['GLOBAL', 'PER_ACCOUNT'] as const).map((scope) => (
-                <label key={scope} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    {...register('limitScope')}
-                    value={scope}
-                    className="accent-[var(--primary)]"
-                  />
-                  {scope === 'GLOBAL' ? 'Global' : 'Per account'}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
             <Label htmlFor="defaultSchedulingMode">Default scheduling mode</Label>
             <Select id="defaultSchedulingMode" {...register('defaultSchedulingMode')}>
               {(['INTERVAL', 'FIXED_TIME', 'CUSTOM', 'SMART'] as const).map((mode) => (
@@ -474,12 +425,11 @@ function PostingTab() {
 }
 
 function buildSummary(values: PostingSettingsDto): string {
-  const limit = values.enableDailyLimit ? `Up to ${values.dailyPostingLimit} posts/day` : 'No daily limit';
   const interval =
     values.minimumIntervalMinutes > 0 ? `at least ${values.minimumIntervalMinutes} min apart` : 'no minimum interval';
   const hours = `${values.activeHoursStart}–${values.activeHoursEnd}`;
   const tz = values.timezone.replaceAll('_', ' ');
-  return `${limit}, ${interval}, ${hours} in ${tz}.`;
+  return `${interval}, ${hours} in ${tz}.`;
 }
 
 /* ─── Accounts tab ────────────────────────────────────────────────────────── */

@@ -1,6 +1,5 @@
 import type {
   ConnectionStatus,
-  LimitScope,
   PublishMethod,
   ScheduledPostStatus,
   SchedulingMode,
@@ -128,14 +127,11 @@ export interface PublishingLogDto {
 }
 
 export interface PostingSettingsDto {
-  enableDailyLimit: boolean;
-  dailyPostingLimit: number;
   minimumIntervalMinutes: number;
   activeHoursStart: string;
   activeHoursEnd: string;
   activeDays: number[];
   timezone: string;
-  limitScope: LimitScope;
   defaultSchedulingMode: SchedulingMode;
   updatedAt: string;
 }
@@ -143,7 +139,6 @@ export interface PostingSettingsDto {
 export interface AccountPostingSettingsDto {
   accountId: string;
   enabled: boolean;
-  dailyPostingLimit: number;
   minimumIntervalMinutes: number;
   activeHoursStart: string;
   activeHoursEnd: string;

@@ -9,7 +9,6 @@ const base: GenerateScheduleForm = {
   startTime: '14:30',
   intervalMinutes: 90,
   postingTimes: ['19:30'],
-  dailyPostingLimit: 5,
   activeDays: [1, 2, 3, 4, 5],
   activeHoursStart: '09:00',
   activeHoursEnd: '22:00',

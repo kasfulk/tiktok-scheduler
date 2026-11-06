@@ -27,9 +27,6 @@ export interface DashboardStats {
   failed: number;
   draft: number;
   todayPublished: number;
-  remainingDailySlots: number;
-  dailyLimit: number;
-  dailyLimitEnabled: boolean;
   timezone: string;
 }
 

@@ -330,7 +330,7 @@ function AccountLimitsDialog({ account, onClose }: { account: AccountDto; onClos
             <div className="space-y-4">
               <div className="flex items-center justify-between rounded-lg border border-border p-3">
                 <Label htmlFor="account-enabled" className="text-sm font-medium text-foreground">
-                  Enable custom limits
+                  Custom scheduling override
                 </Label>
                 <Controller
                   name="enabled"
@@ -338,7 +338,7 @@ function AccountLimitsDialog({ account, onClose }: { account: AccountDto; onClos
                   render={({ field }) => (
                     <Switch
                       id="account-enabled"
-                      label="Enable custom limits"
+                      label="Custom scheduling override"
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
@@ -346,27 +346,15 @@ function AccountLimitsDialog({ account, onClose }: { account: AccountDto; onClos
                 />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="account-daily-limit">Daily limit</Label>
-                  <Input
-                    id="account-daily-limit"
-                    type="number"
-                    min={1}
-                    max={100}
-                    {...register('dailyPostingLimit', { valueAsNumber: true })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="account-interval">Minimum interval (min)</Label>
-                  <Input
-                    id="account-interval"
-                    type="number"
-                    min={0}
-                    {...register('minimumIntervalMinutes', { valueAsNumber: true })}
-                  />
-                  <p className="text-[11px] text-muted-foreground">0 = no minimum gap.</p>
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="account-interval">Minimum interval (min)</Label>
+                <Input
+                  id="account-interval"
+                  type="number"
+                  min={0}
+                  {...register('minimumIntervalMinutes', { valueAsNumber: true })}
+                />
+                <p className="text-[11px] text-muted-foreground">0 = no minimum gap.</p>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
