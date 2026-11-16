@@ -117,9 +117,13 @@ export async function createScheduleBatch(input: ScheduleRequest): Promise<Creat
   });
 
   if (generated.slots.length === 0) {
-    throw new SchedulingError('NO_CAPACITY', 'No schedule slots fit the current limits and active hours', {
-      warnings: generated.warnings,
-    });
+    throw new SchedulingError(
+      'NO_CAPACITY',
+      input.mode === 'CUSTOM'
+        ? 'That publish time is in the past; pick a future date and time'
+        : 'No schedule slots fit the current limits and active hours',
+      { warnings: generated.warnings },
+    );
   }
 
   const batchName = input.name ?? `Batch ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;

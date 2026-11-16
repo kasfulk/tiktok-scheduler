@@ -44,6 +44,7 @@ import { ConfirmDialog } from '@/components/ui/dialog';
 import { VideoPreviewDialog } from '@/components/video/video-preview-dialog';
 import { VideoEditDialog } from '@/components/video/video-edit-dialog';
 import { BulkCaptionDialog } from '@/components/video/bulk-caption-dialog';
+import { SchedulePostDialog } from '@/components/video/schedule-post-dialog';
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'All' },
@@ -70,6 +71,7 @@ export default function ContentPage() {
 
   const [previewVideo, setPreviewVideo] = useState<VideoDto | null>(null);
   const [editVideo, setEditVideo] = useState<VideoDto | null>(null);
+  const [scheduleVideo, setScheduleVideo] = useState<VideoDto | null>(null);
   const [deleteVideo, setDeleteVideo] = useState<VideoDto | null>(null);
   const [bulkCaptionOpen, setBulkCaptionOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -360,8 +362,8 @@ export default function ContentPage() {
                         {video.scheduledPost ? (
                           <div className="text-xs">
                             <p className="font-medium">
-                              {formatLocalDate(video.scheduledPost.scheduledAt, 'UTC')}{' '}
-                              {formatLocalTime(video.scheduledPost.scheduledAt, 'UTC')}
+                              {formatLocalDate(video.scheduledPost.scheduledAt, video.scheduledPost.timezone)}{' '}
+                              {formatLocalTime(video.scheduledPost.scheduledAt, video.scheduledPost.timezone)}
                             </p>
                             <p className="text-muted-foreground">
                               @{video.scheduledPost.accountUsername}
@@ -375,6 +377,7 @@ export default function ContentPage() {
                         <RowActions
                           onPreview={() => setPreviewVideo(video)}
                           onEdit={() => setEditVideo(video)}
+                          onSchedule={() => setScheduleVideo(video)}
                           onDelete={() => setDeleteVideo(video)}
                           onMoveToQueue={() => router.push(`/calendar?videoId=${video.id}`)}
                         />
@@ -429,6 +432,12 @@ export default function ContentPage() {
         onOpenChange={(open) => !open && setEditVideo(null)}
       />
 
+      <SchedulePostDialog
+        video={scheduleVideo}
+        open={!!scheduleVideo}
+        onOpenChange={(open) => !open && setScheduleVideo(null)}
+      />
+
       <ConfirmDialog
         open={!!deleteVideo}
         onOpenChange={(open) => !open && setDeleteVideo(null)}
@@ -462,11 +471,13 @@ export default function ContentPage() {
 function RowActions({
   onPreview,
   onEdit,
+  onSchedule,
   onDelete,
   onMoveToQueue,
 }: {
   onPreview: () => void;
   onEdit: () => void;
+  onSchedule: () => void;
   onDelete: () => void;
   onMoveToQueue: () => void;
 }) {
@@ -502,6 +513,17 @@ function RowActions({
             >
               <Edit3 className="size-4" />
               Edit metadata
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onSchedule();
+                setOpen(false);
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-muted"
+            >
+              <Calendar className="size-4" />
+              Schedule post
             </button>
             <button
               type="button"

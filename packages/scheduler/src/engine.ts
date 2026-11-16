@@ -13,7 +13,6 @@ import {
 import type {
   ScheduleSlot,
   ScheduleConstraints,
-  ExistingOccupancy,
   GenerateScheduleInput,
   GeneratedSchedule,
 } from './types';
@@ -271,56 +270,26 @@ function generateFixedTimeSlots(input: GenerateScheduleInput): { slots: Schedule
 }
 
 function generateCustomSlots(input: GenerateScheduleInput): { slots: ScheduleSlot[]; unscheduled: number; warnings: string[] } {
-  const { constraints, count, customSlots, occupancy, now } = input;
+  const { constraints, count, customSlots, now } = input;
   const tz = constraints.timezone;
   const nowMs = toDate(now).getTime();
-  const startMin = timeToMinutes(constraints.activeHours.start);
-  const endMin = timeToMinutes(constraints.activeHours.end);
 
   const slots: ScheduleSlot[] = [];
   const warnings: string[] = [];
   let unscheduled = 0;
 
-  let lastSlotMs: number | null = null;
-  if (occupancy?.lastScheduledAt) {
-    lastSlotMs = new Date(occupancy.lastScheduledAt).getTime();
-  }
-
   const limit = Math.min(customSlots!.length, count);
   for (let i = 0; i < limit; i++) {
-    const entry = customSlots![i]!;
-    const { date, time } = entry;
-
-    if (!isActiveDay(date, constraints.activeDays)) {
-      unscheduled++;
-      warnings.push(`Slot on ${date} dropped: not an active day`);
-      continue;
-    }
-
-    const timeMin = timeToMinutes(time);
-    if (timeMin < startMin || timeMin >= endMin) {
-      unscheduled++;
-      warnings.push(`Slot on ${date} dropped: outside active hours`);
-      continue;
-    }
-
+    const { date, time } = customSlots![i]!;
     const slot = makeSlot(date, time, tz);
-    const slotMs = new Date(slot.scheduledAt).getTime();
 
-    if (slotMs < nowMs) {
+    if (new Date(slot.scheduledAt).getTime() < nowMs) {
       unscheduled++;
-      warnings.push(`Slot on ${date} dropped: in the past`);
-      continue;
-    }
-
-    if (lastSlotMs != null && slotMs - lastSlotMs < constraints.minimumIntervalMinutes * 60_000) {
-      unscheduled++;
-      warnings.push(`Slot on ${date} dropped: too close to previous slot`);
+      warnings.push(`Slot on ${date} ${time} dropped: in the past`);
       continue;
     }
 
     slots.push(slot);
-    lastSlotMs = slotMs;
   }
 
   return { slots, unscheduled, warnings };

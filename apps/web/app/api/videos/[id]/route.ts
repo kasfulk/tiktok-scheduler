@@ -13,6 +13,7 @@ const include = {
     select: {
       id: true,
       scheduledAt: true,
+      timezone: true,
       status: true,
       accountId: true,
       account: { select: { username: true } },

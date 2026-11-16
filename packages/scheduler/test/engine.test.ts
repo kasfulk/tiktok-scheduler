@@ -113,28 +113,47 @@ describe('SMART mode', () => {
 });
 
 describe('CUSTOM mode', () => {
-  it('maps custom slots and drops violations', () => {
+  it('keeps explicit slots even outside active hours or the minimum interval', () => {
     const input: GenerateScheduleInput = {
       mode: 'CUSTOM',
-      count: 5,
+      count: 4,
       startDate: '2026-11-01',
       customSlots: [
-        { date: '2026-11-01', time: '09:00' },
-        { date: '2026-11-02', time: '10:00' },
-        { date: '2026-11-03', time: '23:00' }, // outside active hours
-        { date: '2026-11-04', time: '11:00' },
-        { date: '2026-11-05', time: '12:00' },
+        { date: '2026-11-01', time: '23:30' }, // outside active hours
+        { date: '2026-11-01', time: '23:31' }, // 1 min after the previous slot
+        { date: '2026-11-07', time: '02:00' }, // outside active hours
+        { date: '2026-11-08', time: '12:00' },
       ],
-      constraints: baseConstraints,
+      constraints: { ...baseConstraints, minimumIntervalMinutes: 60 },
       now: '2026-10-01T00:00:00Z',
     };
 
     const result = generateSchedule(input);
 
     expect(result.slots).toHaveLength(4);
+    expect(result.unscheduled).toBe(0);
+    expect(result.warnings).toHaveLength(0);
+    expect(result.slots.map((s) => s.localTime)).toEqual(['23:30', '23:31', '02:00', '12:00']);
+  });
+
+  it('drops only slots already in the past', () => {
+    const input: GenerateScheduleInput = {
+      mode: 'CUSTOM',
+      count: 2,
+      startDate: '2026-11-01',
+      customSlots: [
+        { date: '2026-11-01', time: '09:00' },
+        { date: '2026-11-02', time: '09:00' },
+      ],
+      constraints: baseConstraints,
+      now: '2026-11-01T12:00:00Z',
+    };
+
+    const result = generateSchedule(input);
+
+    expect(result.slots).toHaveLength(1);
     expect(result.unscheduled).toBe(1);
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toContain('2026-11-03');
+    expect(result.warnings[0]).toContain('in the past');
   });
 });
 

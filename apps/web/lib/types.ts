@@ -28,6 +28,7 @@ export interface VideoDto {
   scheduledPost: {
     id: string;
     scheduledAt: string;
+    timezone: string;
     status: ScheduledPostStatus;
     accountId: string;
     accountUsername: string;

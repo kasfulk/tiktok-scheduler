@@ -23,6 +23,7 @@ export interface VideoRow {
   scheduledPosts?: Array<{
     id: string;
     scheduledAt: Date;
+    timezone: string;
     status: string;
     accountId: string;
     account: { username: string };
@@ -55,6 +56,7 @@ export function videoToDto(video: VideoRow): VideoDto {
       ? {
           id: next.id,
           scheduledAt: next.scheduledAt.toISOString(),
+          timezone: next.timezone,
           status: next.status as ScheduledPostStatus,
           accountId: next.accountId,
           accountUsername: next.account.username,
