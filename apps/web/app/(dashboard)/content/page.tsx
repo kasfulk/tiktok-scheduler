@@ -90,7 +90,12 @@ export default function ContentPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.videos(queryParams),
-    queryFn: () => apiFetch<Paginated<VideoDto>>('/api/videos', { json: undefined }),
+    queryFn: () => {
+      const params = new URLSearchParams(
+        Object.entries(queryParams).filter(([, value]) => value !== ''),
+      );
+      return apiFetch<Paginated<VideoDto>>(`/api/videos?${params.toString()}`);
+    },
     placeholderData: (prev) => prev,
   });
 
@@ -195,7 +200,14 @@ export default function ContentPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={sort} onChange={(e) => setSort(e.target.value)} className="w-auto">
+            <Select
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value);
+                setPage(1);
+              }}
+              className="w-auto"
+            >
               {SORT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -205,7 +217,10 @@ export default function ContentPage() {
             <Button
               variant="outline"
               size="icon"
-              onClick={() => setOrder(order === 'asc' ? 'desc' : 'asc')}
+              onClick={() => {
+                setOrder(order === 'asc' ? 'desc' : 'asc');
+                setPage(1);
+              }}
               aria-label={`Sort ${order === 'asc' ? 'descending' : 'ascending'}`}
             >
               {order === 'asc' ? <ArrowUp className="size-4" /> : <ArrowDown className="size-4" />}
